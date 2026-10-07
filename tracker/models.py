@@ -18,7 +18,8 @@ class Title(models.Model):
     year = models.PositiveIntegerField(null=True, blank=True)
     poster_url = models.URLField(blank=True)
     duration_min = models.PositiveIntegerField(default=100)
-    tmdb_id = models.IntegerField(null=True, blank=True, unique=True)
+    tmdb_id = models.IntegerField(null=True, blank=True)
+    tmdb_type = models.CharField(max_length=10, blank=True)  # movie или tv
     imdb_id = models.CharField(max_length=15, blank=True)
 
     def __str__(self):

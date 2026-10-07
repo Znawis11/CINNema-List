@@ -6,7 +6,7 @@ from .models import Entry
 from .forms import EntryForm
 from django.views.decorators.http import require_POST
 from .models import Entry, Title, Genre
-from . import imdb
+from . import tmdb
 
 
 def register(request):
@@ -75,41 +75,54 @@ def entry_delete(request, pk):
     return render(request, 'tracker/entry_confirm_delete.html', {'entry': entry})
 
 @login_required
-def imdb_page(request):
-    return render(request, 'tracker/imdb_search.html')
+def tmdb_page(request):
+    return render(request, 'tracker/tmdb_search.html')
 
 
 @login_required
-def imdb_results(request):
+def tmdb_results(request):
     q = request.GET.get('q', '').strip()
-    results = imdb.search(q) if len(q) >= 2 else []
-    return render(request, 'tracker/_imdb_results.html', {'results': results, 'q': q})
+    results = tmdb.search(q) if len(q) >= 2 else []
+    return render(request, 'tracker/_tmdb_results.html', {'results': results, 'q': q})
 
 
 @login_required
 @require_POST
-def imdb_add(request, imdb_id):
-    d = imdb.details(imdb_id)
-    if not d:
-        return redirect('imdb_page')
+def tmdb_add(request, media_type, tmdb_id):
+    if media_type not in ('movie', 'tv'):
+        return redirect('tmdb_page')
 
-    title = Title.objects.filter(imdb_id=imdb_id).first()
+    title = Title.objects.filter(tmdb_id=tmdb_id, tmdb_type=media_type).first()
     if not title:
-        year = d.get('Year', '')[:4]
-        runtime = d.get('Runtime', '').split(' ')[0]
-        genre_names = [g.strip() for g in d.get('Genre', '').split(',') if g.strip()]
-        is_doc = 'Documentary' in genre_names
+        d = tmdb.details(media_type, tmdb_id)
+        if not d:
+            return redirect('tmdb_page')
+
+        date = d.get('release_date') or d.get('first_air_date') or ''
+        genre_names = [g['name'] for g in d.get('genres', [])]
+        is_doc = 'документальный' in [g.lower() for g in genre_names]
+
+        if media_type == 'movie':
+            director = next((c['name'] for c in d.get('credits', {}).get('crew', [])
+                             if c.get('job') == 'Director'), '')
+            duration = d.get('runtime') or 100
+        else:
+            director = ', '.join(c['name'] for c in d.get('created_by', [])[:2])
+            runtimes = d.get('episode_run_time') or [45]
+            duration = runtimes[0]
+
         title = Title.objects.create(
-            name=d.get('Title', ''),
-            director=d.get('Director', '') if d.get('Director') != 'N/A' else '',
-            type='doc' if is_doc else ('series' if d.get('Type') == 'series' else 'movie'),
-            year=int(year) if year.isdigit() else None,
-            poster_url=d.get('Poster', '') if d.get('Poster') != 'N/A' else '',
-            duration_min=int(runtime) if runtime.isdigit() else 100,
-            imdb_id=imdb_id,
+            name=d.get('title') or d.get('name') or '',
+            director=director,
+            type='doc' if is_doc else ('series' if media_type == 'tv' else 'movie'),
+            year=int(date[:4]) if date[:4].isdigit() else None,
+            poster_url=tmdb.IMG + d['poster_path'] if d.get('poster_path') else '',
+            duration_min=duration,
+            tmdb_id=tmdb_id,
+            tmdb_type=media_type,
         )
         for g in genre_names:
-            genre, _ = Genre.objects.get_or_create(name=imdb.GENRES_RU.get(g, g))
+            genre, _ = Genre.objects.get_or_create(name=g.capitalize())
             title.genres.add(genre)
 
     entry, _ = Entry.objects.get_or_create(user=request.user, title=title)
