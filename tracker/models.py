@@ -23,6 +23,13 @@ class Title(models.Model):
     imdb_id = models.CharField(max_length=15, blank=True)
     original_name = models.CharField(max_length=255, blank=True)
     local_file = models.CharField(max_length=500, blank=True)
+    overview = models.TextField(blank=True)
+    # рейтинги с разных сайтов (кэшируются при добавлении/открытии фильма)
+    tmdb_rating = models.FloatField(null=True, blank=True)
+    imdb_rating = models.FloatField(null=True, blank=True)
+    rt_rating = models.CharField(max_length=20, blank=True)        # Rotten Tomatoes, напр. "88%"
+    metacritic_rating = models.CharField(max_length=20, blank=True)  # Metacritic, напр. "73"
+    kp_rating = models.FloatField(null=True, blank=True)           # Кинопоиск (если задан ключ)
 
     def __str__(self):
         return self.name

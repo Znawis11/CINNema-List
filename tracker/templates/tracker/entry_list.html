@@ -1,29 +1,149 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>Моя коллекция</h2>
-  <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить</a>
-      <div>
-    <a href="{% url 'tmdb_page' %}" class="btn btn-warning">Найти фильм</a>
-    <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
-  </div>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">Моя коллекция
+    <span class="badge bg-secondary fs-6">{{ entries|length }}</span>
+  </h2>
+  <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
 </div>
 
-<form class="row g-2 mb-4"
-      hx-get="{% url 'entry_list' %}"
-      hx-trigger="keyup changed delay:300ms from:#q, change from:#status"
-      hx-target="#results">
-  <div class="col-md-8">
-    <input id="q" name="q" value="{{ q }}" class="form-control"
-           placeholder="Название, режиссёр, жанр или тег..." autofocus>
+{% if popular %}
+<section class="mb-4">
+  <h5 class="mb-2">🔥 Популярное сейчас
+    <span class="text-muted fs-6 fw-normal">— по данным IMDb</span>
+  </h5>
+  <div class="popular-row">
+    {% for p in popular %}
+    <a class="pop-card card h-100 hover-card"
+       href="{% url 'tmdb_page' %}?q={{ p.title|urlencode }}"
+       title="Найти «{{ p.title }}» в базе">
+      {% if p.poster %}
+        <img src="{{ p.poster }}" class="poster" alt="{{ p.title }}" loading="lazy">
+      {% else %}
+        <div class="poster-ph">Нет постера</div>
+      {% endif %}
+      <div class="card-body p-2">
+        <div class="small fw-semibold text-truncate">{{ p.title }}</div>
+        <div class="d-flex justify-content-between small text-muted">
+          <span>{{ p.year|default:"—" }}</span>
+          {% if p.rating %}<span class="text-warning">★ {{ p.rating }}</span>{% endif %}
+        </div>
+      </div>
+    </a>
+    {% endfor %}
   </div>
-  <div class="col-md-4">
-    <select id="status" name="status" class="form-select">
-      <option value="">Все статусы</option>
-      <option value="watched">Просмотрено</option>
-      <option value="watching">В процессе</option>
-      <option value="planned">В планах</option>
-    </select>
+</section>
+{% endif %}
+
+{# --- Поиск и фильтры (обновляются через htmx) --- #}
+<form id="filters" class="mb-4"
+      hx-get="{% url 'entry_list' %}"
+      hx-trigger="keyup changed delay:300ms from:#q,
+                  change from:#filters select,
+                  change from:#filters input[type=checkbox]"
+      hx-target="#results"
+      hx-include="#filters">
+  <div class="row g-2">
+    <div class="col-lg-5">
+      <input id="q" name="q" value="{{ q }}" class="form-control"
+             placeholder="Название, режиссёр, жанр или тег..." autofocus>
+    </div>
+    <div class="col-lg-3">
+      <select id="status" name="status" class="form-select">
+        <option value="">Все статусы</option>
+        {% for value, label in statuses %}
+          <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-lg-2">
+      <select name="sort" class="form-select" title="Сортировка">
+        {% for value, label in sorts %}
+          <option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-lg-2 d-flex gap-2">
+      <button type="button" class="btn btn-outline-secondary flex-fill"
+              data-bs-toggle="collapse" data-bs-target="#moreFilters">
+        ⚙ Фильтры
+        {% if active_filters %}<span class="badge bg-primary">{{ active_filters }}</span>{% endif %}
+      </button>
+      <a href="{% url 'entry_list' %}" class="btn btn-link text-decoration-none">Сброс</a>
+    </div>
+  </div>
+
+  <div class="collapse {% if active_filters %}show{% endif %} mt-3" id="moreFilters">
+    <div class="card card-body">
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="fw-semibold mb-1">Жанры</div>
+          <div class="d-flex flex-wrap gap-2">
+            {% for g in all_genres %}
+              <label class="filter-chip position-relative">
+                <input type="checkbox" name="genres" value="{{ g.pk }}"
+                       {% if g.pk|stringformat:'s' in genres_sel %}checked{% endif %}>
+                <span>{{ g.name }}</span>
+              </label>
+            {% empty %}
+              <span class="text-muted small">Жанры появятся после добавления фильмов</span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="fw-semibold mb-1">Мои теги</div>
+          <div class="d-flex flex-wrap gap-2">
+            {% for t in all_tags %}
+              <label class="filter-chip position-relative">
+                <input type="checkbox" name="tags" value="{{ t.pk }}"
+                       {% if t.pk|stringformat:'s' in tags_sel %}checked{% endif %}>
+                <span>#{{ t.name }}</span>
+              </label>
+            {% empty %}
+              <span class="text-muted small">Свои теги можно добавить в карточке фильма (вкладка «Теги»)</span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="fw-semibold mb-1">Длительность</div>
+          <select name="dur" class="form-select form-select-sm">
+            {% for value, label in durations %}
+              <option value="{{ value }}" {% if dur == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="fw-semibold mb-1">Моя оценка</div>
+          <select name="min_rating" class="form-select form-select-sm">
+            {% for value, label in my_ratings %}
+              <option value="{{ value }}" {% if min_rating == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="fw-semibold mb-1">Рейтинг сайта</div>
+          <select name="min_score" class="form-select form-select-sm">
+            {% for value, label in site_ratings %}
+              <option value="{{ value }}" {% if min_score == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="fw-semibold mb-1">Тип</div>
+          <select name="type" class="form-select form-select-sm">
+            <option value="">Любой</option>
+            {% for value, label in types %}
+              <option value="{{ value }}" {% if type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
   </div>
 </form>
 

@@ -1,9 +1,10 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Удалить «{{ entry.title.name }}»?</h2>
+<p class="text-muted">Фильм исчезнет из вашей коллекции вместе с оценками и тегами.</p>
 <form method="post">
   {% csrf_token %}
   <button class="btn btn-danger">Да, удалить</button>
-  <a href="{% url 'entry_list' %}" class="btn btn-secondary">Отмена</a>
+  <a href="{% url 'entry_detail' entry.pk %}" class="btn btn-secondary">Отмена</a>
 </form>
-{% endblock %}python manage.py runserver
+{% endblock %}

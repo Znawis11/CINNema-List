@@ -132,5 +132,13 @@ MAILERS = {
 
 TMDB_API_KEY = '637aba21ba668f38b983e72673e462ec'
 
+# OMDb (omdbapi.com) — рейтинги IMDb / Rotten Tomatoes / Metacritic.
+# Ключ 'trilogy' — публичный демо-ключ; при желании получите свой бесплатно
+# на https://www.omdbapi.com/apikey.aspx и подставьте сюда ('' — отключить).
+OMDB_API_KEY = 'trilogy'
+
+# Кинопоиск (api.kinopoisk.dev) — необязательно, нужен токен: '' — отключить.
+KINOPOISK_API_KEY = ''
+
 from pathlib import Path as _P
 MEDIA_LIBRARY_DIR = _P.home() / 'Movies'   # папка, где лежат фильмы
