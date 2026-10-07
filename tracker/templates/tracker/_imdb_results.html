@@ -2,17 +2,18 @@
 {% for r in results %}
   <div class="col-md-3 mb-3">
     <div class="card h-100">
-      {% if r.Poster != 'N/A' %}<img src="{{ r.Poster }}" class="card-img-top">{% endif %}
+      {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top">{% endif %}
       <div class="card-body">
-        <h5>{{ r.Title }}</h5>
-        <div class="text-muted small">{{ r.Year }} · {{ r.Type }}</div>
+        <h5>{{ r.title }}</h5>
+        <div class="text-muted small">
+          {{ r.year }} · {% if r.media_type == 'tv' %}сериал{% else %}фильм{% endif %}
+          {% if r.rating %}· ⭐ {{ r.rating }}{% endif %}
+        </div>
       </div>
       <div class="card-footer">
-        <form method="post" action="{% url 'imdb_add' r.imdbID %}">
+        <form method="post" action="{% url 'tmdb_add' r.media_type r.id %}">
           {% csrf_token %}
           <button class="btn btn-sm btn-success">Добавить в коллекцию</button>
-          <a href="https://www.imdb.com/title/{{ r.imdbID }}/" target="_blank"
-             class="btn btn-sm btn-outline-secondary">IMDb</a>
         </form>
       </div>
     </div>
