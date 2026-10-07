@@ -41,6 +41,15 @@
     /* карточки рейтингов */
     .rating-card .value { font-size: 1.4rem; font-weight: 600; line-height: 1.2; }
     .rating-card .label { font-size: .78rem; opacity: .85; }
+
+    /* аватар (первая буква имени) */
+    .avatar-circle { width: 32px; height: 32px; border-radius: 50%;
+                     background: #0d6efd; color: #fff; font-weight: 600;
+                     display: inline-flex; align-items: center;
+                     justify-content: center; flex: 0 0 auto; }
+    .avatar-lg { width: 72px; height: 72px; font-size: 1.8rem; }
+    .navbar-username { color: #fff; }
+    a:hover .navbar-username { color: #ffc107; }
   </style>
 </head>
 <body class="bg-light">
@@ -57,12 +66,18 @@
         <ul class="navbar-nav me-auto">
           <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'entry_list' %}active{% endif %}" href="{% url 'entry_list' %}">Коллекция</a></li>
           <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'tmdb_page' %}active{% endif %}" href="{% url 'tmdb_page' %}">Поиск фильмов</a></li>
-          <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'library_page' %}active{% endif %}" href="{% url 'library_page' %}">Папки</a></li>
         </ul>
-        <form method="post" action="{% url 'logout' %}" class="m-0">
-          {% csrf_token %}
-          <button class="btn btn-outline-warning btn-sm">Выйти ({{ user.username }})</button>
-        </form>
+        <div class="d-flex align-items-center gap-3">
+          <a href="{% url 'profile' %}" class="d-flex align-items-center gap-2 text-decoration-none"
+             title="Профиль и статистика">
+            <span class="avatar-circle">{{ user.username|first|upper }}</span>
+            <span class="navbar-username">{{ user.username }}</span>
+          </a>
+          <form method="post" action="{% url 'logout' %}" class="m-0">
+            {% csrf_token %}
+            <button class="btn btn-outline-warning btn-sm">Выйти</button>
+          </form>
+        </div>
       {% else %}
         <ul class="navbar-nav ms-auto">
           <li class="nav-item"><a class="nav-link" href="{% url 'login' %}">Вход</a></li>

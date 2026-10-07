@@ -1,8 +1,29 @@
 {% if title.local_file %}
-  <video controls autoplay class="w-100 bg-black rounded" style="max-height:70vh">
+  <video controls autoplay class="w-100 bg-black rounded" style="max-height:70vh" id="playerVideo">
     <source src="{% url 'stream' title.pk %}">
     Браузер не поддерживает это видео.
   </video>
+  <script>
+    // Учёт времени просмотра: пинг каждые 45 с во время воспроизведения,
+    // финальный пинг — на паузе/окончании/закрытии вкладки.
+    (function () {
+      const video = document.getElementById('playerVideo');
+      const url = "{% url 'track_ping' title.pk %}";
+      const send = () => {
+        const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        const body = new URLSearchParams({ csrfmiddlewaretoken: csrf });
+        if (navigator.sendBeacon) navigator.sendBeacon(url, body);
+        else fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+      };
+      let timer = null;
+      const start = () => { if (!timer) { send(); timer = setInterval(send, 45000); } };
+      const stop = () => { if (timer) { clearInterval(timer); timer = null; send(); } };
+      video.addEventListener('play', start);
+      video.addEventListener('pause', stop);
+      video.addEventListener('ended', stop);
+      window.addEventListener('beforeunload', () => timer && send());
+    })();
+  </script>
   <div class="d-flex justify-content-between align-items-center gap-2 mt-2">
     <span class="text-muted small text-truncate" title="{{ title.local_file }}">Файл: {{ title.local_file }}</span>
     <button class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="collapse"

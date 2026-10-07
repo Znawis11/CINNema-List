@@ -16,4 +16,7 @@ urlpatterns = [
     path('stream/<int:pk>/', views.stream, name='stream'),
     path('library/', views.library_page, name='library_page'),
     path('library/browse/', views.browse, name='browse'),
+    path('profile/', views.profile, name='profile'),
+    path('entry/<int:pk>/episodes/', views.entry_episodes, name='entry_episodes'),
+    path('track/<int:pk>/', views.track_ping, name='track_ping'),
 ]

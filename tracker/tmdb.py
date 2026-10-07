@@ -61,6 +61,22 @@ def details(media_type, tmdb_id):
     return data if data.get('id') else None
 
 
+def season(tv_id, number):
+    """Список серий сезона сериала (названия, длительность, даты выхода)."""
+    data = _get(f'/tv/{tv_id}/season/{number}')
+    if not data.get('episodes'):
+        return None
+    return {
+        'name': data.get('name') or f'Сезон {number}',
+        'episodes': [{
+            'number': e.get('episode_number'),
+            'name': e.get('name') or f'Серия {e.get("episode_number")}',
+            'runtime': e.get('runtime'),
+            'air_date': e.get('air_date') or '',
+        } for e in data['episodes']],
+    }
+
+
 def keywords(media_type, tmdb_id):
     """Ключевые слова (теги) фильма с TMDB."""
     data = _get(f'/{media_type}/{tmdb_id}/keywords')

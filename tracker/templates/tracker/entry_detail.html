@@ -40,6 +40,11 @@
       <li class="nav-item">
         <a class="nav-link {% if tab == 'tags' %}active{% endif %}" href="?tab=tags">Теги</a>
       </li>
+      {% if is_series %}
+      <li class="nav-item">
+        <a class="nav-link {% if tab == 'episodes' %}active{% endif %}" href="?tab=episodes">Серии</a>
+      </li>
+      {% endif %}
       <li class="nav-item">
         <a class="nav-link {% if tab == 'player' %}active{% endif %}" href="?tab=player">Видеоплеер</a>
       </li>
@@ -171,6 +176,83 @@
       {% if entry.review %}
         <h6 class="mt-4">Рецензия</h6>
         <p class="mb-0">{{ entry.review|linebreaksbr }}</p>
+      {% endif %}
+
+    {# ============ ВКЛАДКА: СЕРИИ ============ #}
+    {% elif tab == 'episodes' %}
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+        <h6 class="mb-0">
+          Серии
+          {% if watched_total %}<span class="text-muted fs-6 fw-normal">· просмотрено {{ watched_total }}{% if title.total_episodes %} из {{ title.total_episodes }}{% endif %}</span>{% endif %}
+        </h6>
+        {% if season_numbers|length > 1 %}
+          <div class="btn-group btn-group-sm" role="group" aria-label="Сезоны">
+            {% for sn in season_numbers %}
+              <a class="btn btn-outline-secondary {% if sn == current_season %}active{% endif %}"
+                 href="?tab=episodes&season={{ sn }}">С{{ sn }}</a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      {% if episodes %}
+        <ul class="list-group mb-3">
+          {% for ep in episodes %}
+            <li class="list-group-item d-flex align-items-center gap-2 {% if ep.watched_at %}bg-body-tertiary{% endif %}">
+              <div class="flex-grow-1">
+                <span class="fw-semibold">{{ ep.number }}.</span> {{ ep.name }}
+                <span class="text-muted small">
+                  {% if ep.air_date %} · {{ ep.air_date|date:"d.m.Y" }}{% endif %}
+                  {% if ep.runtime %} · {{ ep.runtime }} мин{% endif %}
+                </span>
+              </div>
+              {% if ep.watched_at %}
+                <form method="post" action="{% url 'entry_episodes' entry.pk %}" class="m-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="unwatch">
+                  <input type="hidden" name="season" value="{{ current_season }}">
+                  <input type="hidden" name="number" value="{{ ep.number }}">
+                  <button class="btn btn-sm btn-success text-nowrap" title="Снять отметку ({{ ep.watched_at|date:'d.m.Y' }})">✓ {{ ep.watched_at|date:"d.m" }}</button>
+                </form>
+              {% else %}
+                <form method="post" action="{% url 'entry_episodes' entry.pk %}" class="m-0">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="watch">
+                  <input type="hidden" name="season" value="{{ current_season }}">
+                  <input type="hidden" name="number" value="{{ ep.number }}">
+                  <button class="btn btn-sm btn-outline-success text-nowrap">Просмотрена</button>
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted">
+          {% if no_tmdb %}
+            Сериал добавлен не через TMDB — список серий недоступен.
+          {% else %}
+            Список серий не загрузился (нет данных TMDB). Отметьте серию вручную:
+          {% endif %}
+        </p>
+      {% endif %}
+
+      {% if no_tmdb or not episodes %}
+        <form method="post" action="{% url 'entry_episodes' entry.pk %}"
+              class="d-flex gap-2 align-items-end flex-wrap">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="watch">
+          <div>
+            <label class="form-label small mb-1" for="ep-season">Сезон</label>
+            <input class="form-control form-control-sm" style="width:90px" type="number"
+                   id="ep-season" name="season" value="{{ current_season }}" min="1">
+          </div>
+          <div>
+            <label class="form-label small mb-1" for="ep-number">Серия</label>
+            <input class="form-control form-control-sm" style="width:90px" type="number"
+                   id="ep-number" name="number" min="1" required>
+          </div>
+          <button class="btn btn-sm btn-primary">Отметить просмотренной</button>
+        </form>
       {% endif %}
 
     {# ============ ВКЛАДКА: ВИДЕОПЛЕЕР ============ #}

@@ -24,6 +24,7 @@ class Title(models.Model):
     original_name = models.CharField(max_length=255, blank=True)
     local_file = models.CharField(max_length=500, blank=True)
     overview = models.TextField(blank=True)
+    total_episodes = models.PositiveIntegerField(null=True, blank=True)  # всех серий (из TMDB)
     # рейтинги с разных сайтов (кэшируются при добавлении/открытии фильма)
     tmdb_rating = models.FloatField(null=True, blank=True)
     imdb_rating = models.FloatField(null=True, blank=True)
@@ -88,3 +89,17 @@ class LibraryFolder(models.Model):
 
     def __str__(self):
         return self.path
+
+
+class WatchSession(models.Model):
+    """Один сеанс просмотра в плеере: продлевается пингами каждые ~45 сек."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name='watch_sessions')
+    title = models.ForeignKey(Title, on_delete=models.CASCADE,
+                              related_name='watch_sessions')
+    started_at = models.DateTimeField(auto_now_add=True)
+    last_ping = models.DateTimeField()
+    seconds = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f'{self.user} - {self.title} ({self.seconds} c)'
