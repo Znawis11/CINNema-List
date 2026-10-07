@@ -7,12 +7,15 @@ BASE = 'https://api.themoviedb.org/3'
 IMG = 'https://image.tmdb.org/t/p/w500'
 TTL = 3600  # кэш ответов API на час
 _cache = {}
+_offline = False   # True, если последний запрос к TMDB не удалось выполнить
 
 
 def _get(path, **params):
+    global _offline
     key = (path, tuple(sorted(params.items())))
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < TTL:
+        _offline = False   # ответ уже лежит в кэше — сеть не нужна
         return hit[1]
 
     params['api_key'] = settings.TMDB_API_KEY
@@ -21,10 +24,17 @@ def _get(path, **params):
     try:
         r = requests.get(BASE + path, params=params, timeout=10)
         data = r.json()
+        _offline = False
     except (requests.RequestException, ValueError):
         data = {}
+        _offline = True
     _cache[key] = (time.time(), data)
     return data
+
+
+def offline():
+    """True, если последний запрос к TMDB завершился ошибкой сети."""
+    return _offline
 
 
 def _movie(r):

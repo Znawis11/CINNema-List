@@ -1,7 +1,9 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
 from django.urls import reverse
 from django.http import JsonResponse
 from django.utils import timezone
@@ -14,7 +16,7 @@ from django.http import StreamingHttpResponse, Http404
 from django.views.decorators.http import require_POST
 from .forms import EntryForm
 from .models import (Entry, Title, Genre, Tag, LibraryFolder, Episode,
-                     WatchSession)
+                     WatchSession, Collection)
 from . import tmdb, library, imdbapi, ratings
 
 
@@ -48,13 +50,55 @@ MY_RATINGS = [('', 'Любая моя оценка'), ('3', '★ 3 и выше')
               ('4', '★ 4 и выше'), ('5', '★ только 5')]
 SITE_RATINGS = [('', 'Любой рейтинг'), ('5', '5 и выше'), ('6', '6 и выше'),
                 ('7', '7 и выше'), ('8', '8 и выше'), ('9', '9 и выше')]
+REVIEWS = [('', 'Любые рецензии'), ('yes', 'С рецензией'), ('no', 'Без рецензии')]
+LOCATIONS = [('', 'Локально и стриминг'), ('local', 'Только локальные'),
+             ('streaming', 'Только стриминговые')]
+
+
+def _site_score(entry):
+    """Лучший из рейтингов сайтов (IMDb / TMDB / Кинопоиск) для карточки."""
+    scores = [v for v in (entry.title.imdb_rating, entry.title.tmdb_rating,
+                          entry.title.kp_rating) if v]
+    return max(scores) if scores else None
+
+
+def _with_scores(entries):
+    """Предподсчёт рейтинга сайта: SQLite не умеет регистронезависимый поиск
+    по кириллице, поэтому все фильтры ниже выполняются в Python."""
+    for e in entries:
+        e.site_score = _site_score(e)
+    return entries
+
+
+@login_required
+def home(request):
+    """Главная: поиск фильмов, популярное сейчас и последние добавления."""
+    entries = _with_scores(list(
+        Entry.objects.filter(user=request.user)
+        .select_related('title')
+        .prefetch_related('title__genres', 'tags')
+        .order_by('-added_at')[:6]))
+
+    stats = Entry.objects.filter(user=request.user).aggregate(
+        total=Count('id'), watched=Count('id', filter=Q(status='watched')))
+
+    return render(request, 'tracker/home.html', {
+        'q': request.GET.get('q', '').strip(),
+        'popular': imdbapi.popular(18),
+        'recent': entries,
+        'stats': stats,
+        'collections': Collection.objects.filter(user=request.user)
+                                         .annotate(n=Count('entries'))
+                                         .order_by('name')[:8],
+        'has_search': True,
+    })
 
 
 def register(request):
     form = UserCreationForm(request.POST or None)
     if form.is_valid():
         login(request, form.save())
-        return redirect('entry_list')
+        return redirect('home')
     return render(request, 'registration/register.html', {'form': form})
 
 
@@ -67,20 +111,14 @@ def entry_list(request):
     status = request.GET.get('status', '')
     if status in dict(Entry.STATUSES):
         entries = entries.filter(status=status)
-    entries = list(entries)
-
-    # предподсчёт: SQLite не умеет регистронезависимый поиск по кириллице,
-    # поэтому остальные фильтры выполняются в Python
-    for e in entries:
-        scores = [v for v in (e.title.imdb_rating, e.title.tmdb_rating,
-                              e.title.kp_rating) if v]
-        e.site_score = max(scores) if scores else None
+    entries = _with_scores(list(entries))
 
     q = request.GET.get('q', '').strip().lower()
     if q:
         entries = [e for e in entries if
                    q in e.title.name.lower()
                    or q in e.title.director.lower()
+                   or q in e.review.lower()
                    or any(q in g.name.lower() for g in e.title.genres.all())
                    or any(q in t.name.lower() for t in e.tags.all())]
 
@@ -117,6 +155,29 @@ def entry_list(request):
     if title_type in dict(Title.TYPES):
         entries = [e for e in entries if e.title.type == title_type]
 
+    # мои рецензии
+    review = request.GET.get('review', '')
+    if review == 'yes':
+        entries = [e for e in entries if e.review.strip()]
+    elif review == 'no':
+        entries = [e for e in entries if not e.review.strip()]
+
+    # где находится фильм: локально или на стриминге
+    location = request.GET.get('location', '')
+    if location in dict(Entry.LOCATIONS):
+        entries = [e for e in entries if e.location == location]
+
+    # подборка
+    collection = request.GET.get('collection', '')
+    if collection.isdigit():
+        coll = (Collection.objects.filter(pk=collection, user=request.user)
+                .annotate(n=Count('entries')).first())
+        if coll:
+            ids = set(coll.entries.values_list('pk', flat=True))
+            entries = [e for e in entries if e.pk in ids]
+        else:
+            entries = []
+
     sort = request.GET.get('sort', 'added')
     if sort == 'year':
         entries.sort(key=lambda e: e.title.year or 0, reverse=True)
@@ -132,22 +193,25 @@ def entry_list(request):
     ctx = {'entries': entries, 'q': q, 'status': status, 'sort': sort,
            'dur': dur, 'min_rating': request.GET.get('min_rating', ''),
            'min_score': request.GET.get('min_score', ''), 'type': title_type,
+           'review': review, 'location': location, 'collection': collection,
            'genres_sel': genres_sel, 'tags_sel': tags_sel,
            'durations': DURATIONS, 'sorts': SORTS, 'statuses': Entry.STATUSES,
            'types': Title.TYPES, 'my_ratings': MY_RATINGS,
-           'site_ratings': SITE_RATINGS,
+           'site_ratings': SITE_RATINGS, 'reviews': REVIEWS,
+           'locations': LOCATIONS,
+           'collections': Collection.objects.filter(user=request.user)
+                                            .annotate(n=Count('entries'))
+                                            .order_by('name'),
            'all_genres': Genre.objects.all().order_by('name'),
            'all_tags': Tag.objects.filter(user=request.user).order_by('name'),
            'active_filters': len([1 for v in (q, status, dur, title_type,
+                                              review, location, collection,
                                               request.GET.get('min_rating'),
                                               request.GET.get('min_score'),
                                               genres_sel, tags_sel) if v])}
 
     if request.headers.get('HX-Request'):
         return render(request, 'tracker/_entry_cards.html', ctx)
-
-    # строка «Популярное сейчас» — только на полной странице (с кэшем)
-    ctx['popular'] = imdbapi.popular(18)
     return render(request, 'tracker/entry_list.html', ctx)
 
 
@@ -155,7 +219,9 @@ def entry_list(request):
 def entry_create(request):
     form = EntryForm(request.POST or None, user=request.user)
     if form.is_valid():
-        return redirect('entry_detail', pk=form.save().pk)
+        entry = form.save()
+        messages.success(request, f'«{entry.title.name}» добавлен в коллекцию.')
+        return redirect('entry_list')
     return render(request, 'tracker/entry_form.html',
                   {'form': form, 'heading': 'Добавить'})
 
@@ -323,6 +389,9 @@ def entry_tags(request, pk):
                 value = 0
             entry.rating = value if 1 <= value <= 5 else None
             entry.save(update_fields=['rating'])
+        elif action == 'review':
+            entry.review = (request.POST.get('review') or '').strip()[:10000]
+            entry.save(update_fields=['review'])
         elif action == 'add_tag':
             name = request.POST.get('name', '').strip()[:50]
             if name:
@@ -335,6 +404,33 @@ def entry_tags(request, pk):
             except (Tag.DoesNotExist, TypeError, ValueError):
                 pass
     return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=tags")
+
+
+def _streaming_url(raw):
+    """Ссылка на страницу фильма на стриминге (приводим к http/https)."""
+    url = (raw or '').strip()
+    if not url:
+        return ''
+    if not re.match(r'^https?://', url, re.I):
+        url = 'https://' + url.lstrip('/')
+    return url
+
+
+@login_required
+@require_POST
+def entry_location(request, pk):
+    """Метка «где находится фильм»: локальный файл или стриминг."""
+    entry = get_object_or_404(Entry, pk=pk, user=request.user)
+    location = request.POST.get('location')
+    if location in dict(Entry.LOCATIONS):
+        entry.location = location
+        entry.streaming_url = (_streaming_url(request.POST.get('streaming_url'))
+                               if location == 'streaming' else '')
+        entry.save(update_fields=['location', 'streaming_url'])
+        if location == 'streaming' and not entry.streaming_url:
+            messages.warning(request, 'Фильм отмечен как стриминговый — '
+                                      'не забудьте указать ссылку на него.')
+    return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=player")
 
 
 @login_required
@@ -370,6 +466,84 @@ def entry_episodes(request, pk):
     if request.headers.get('X-Fetch'):  # авто-отметка из плеера
         return JsonResponse({'ok': True})
     return redirect(back)
+
+
+# --- подборки фильмов (внутри коллекции) --------------------------------------
+
+@login_required
+def collections_page(request):
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        name = (request.POST.get('name') or '').strip()[:100]
+        if action == 'create':
+            if name:
+                Collection.objects.create(user=request.user, name=name)
+                messages.success(request, f'Подборка «{name}» создана.')
+            else:
+                messages.warning(request, 'Назовите подборку.')
+        elif action == 'rename':
+            coll = Collection.objects.filter(pk=request.POST.get('id'),
+                                             user=request.user).first()
+            if coll and name:
+                coll.name = name
+                coll.save(update_fields=['name'])
+        elif action == 'delete':
+            coll = Collection.objects.filter(pk=request.POST.get('id'),
+                                             user=request.user).first()
+            if coll:
+                cname = coll.name
+                coll.delete()
+                messages.success(request, f'Подборка «{cname}» удалена.')
+        return redirect('collections_page')
+
+    collections = (Collection.objects.filter(user=request.user)
+                   .annotate(n=Count('entries')).order_by('name'))
+    return render(request, 'tracker/collections.html',
+                  {'collections': collections})
+
+
+@login_required
+def collection_detail(request, pk):
+    collection = get_object_or_404(Collection, pk=pk, user=request.user)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'add':
+            ids = request.POST.getlist('entries')
+            entries = list(Entry.objects.filter(pk__in=ids, user=request.user))
+            if entries:
+                collection.entries.add(*entries)
+                messages.success(request,
+                                 f'В подборку добавлено: {len(entries)}.')
+        elif action == 'remove':
+            entry = collection.entries.filter(
+                pk=request.POST.get('entry')).first()
+            if entry:
+                collection.entries.remove(entry)
+        elif action == 'rename':
+            name = (request.POST.get('name') or '').strip()[:100]
+            if name:
+                collection.name = name
+                collection.save(update_fields=['name'])
+        elif action == 'delete':
+            cname = collection.name
+            collection.delete()
+            messages.success(request, f'Подборка «{cname}» удалена.')
+            return redirect('collections_page')
+        return redirect('collection_detail', pk=collection.pk)
+
+    entries = _with_scores(list(
+        collection.entries.select_related('title')
+        .prefetch_related('title__genres', 'tags')))
+    entries.sort(key=lambda e: e.title.name.lower())
+    other = (Entry.objects.filter(user=request.user)
+             .exclude(pk__in=[e.pk for e in entries])
+             .select_related('title').order_by('title__name'))
+    return render(request, 'tracker/collection_detail.html', {
+        'collection': collection, 'entries': entries,
+        'other_entries': other[:300],
+        'statuses': Entry.STATUSES, 'locations': Entry.LOCATIONS,
+    })
 
 
 # --- выбор видеофайла: системный диалог + проводник ---------------------------
@@ -555,8 +729,9 @@ def track_ping(request, pk):
 
 @login_required
 def tmdb_page(request):
-    return render(request, 'tracker/tmdb_search.html',
-                  {'q': request.GET.get('q', '').strip()})
+    """Страница перенесена на главную — старый адрес ведёт туда же."""
+    q = request.GET.get('q', '').strip()
+    return redirect(f"{reverse('home')}?q={quote(q)}" if q else reverse('home'))
 
 
 @login_required
@@ -564,22 +739,36 @@ def tmdb_results(request):
     q = request.GET.get('q', '').strip()
     results = tmdb.search(q) if len(q) >= 2 else []
     folders = library.user_folders(request.user)
+    # что уже есть в коллекции — чтобы не добавлять дубли
+    have = {}
+    if results:
+        mine = Entry.objects.filter(
+            user=request.user,
+            title__tmdb_id__in=[r['id'] for r in results],
+            title__tmdb_type__in=[r['media_type'] for r in results],
+        ).select_related('title')
+        have = {(e.title.tmdb_id, e.title.tmdb_type): e.pk for e in mine}
     for r in results:
         r['local'] = bool(library.find(folders, r['title'], r['original']))
-    return render(request, 'tracker/_tmdb_results.html', {'results': results, 'q': q})
+        r['entry_pk'] = have.get((r['id'], r['media_type']))
+        r['added'] = bool(r['entry_pk'])
+    return render(request, 'tracker/_tmdb_results.html',
+                  {'results': results, 'q': q, 'offline': tmdb.offline()})
 
 
 @login_required
 @require_POST
 def tmdb_add(request, media_type, tmdb_id):
     if media_type not in ('movie', 'tv'):
-        return redirect('tmdb_page')
+        return redirect('home')
 
     title = Title.objects.filter(tmdb_id=tmdb_id, tmdb_type=media_type).first()
     if not title:
         d = tmdb.details(media_type, tmdb_id)
         if not d:
-            return redirect('tmdb_page')
+            messages.error(request, 'Не удалось получить информацию о фильме '
+                                    'из TMDB. Попробуйте ещё раз позже.')
+            return redirect('home')
 
         date = d.get('release_date') or d.get('first_air_date') or ''
         genre_names = [g['name'] for g in d.get('genres', [])]
@@ -618,8 +807,12 @@ def tmdb_add(request, media_type, tmdb_id):
             title.genres.add(genre)
         ratings.enrich(title)  # рейтинги IMDb / Rotten Tomatoes / Metacritic
 
-    entry, _ = Entry.objects.get_or_create(user=request.user, title=title)
-    return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=info")
+    _, created = Entry.objects.get_or_create(user=request.user, title=title)
+    if created:
+        messages.success(request, f'«{title.name}» добавлен в коллекцию.')
+    else:
+        messages.info(request, f'«{title.name}» уже есть в вашей коллекции.')
+    return redirect('home')
 
 
 # --- просмотр ----------------------------------------------------------------

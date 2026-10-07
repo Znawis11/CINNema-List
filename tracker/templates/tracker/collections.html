@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">Подборки
+    <span class="badge bg-secondary fs-6">{{ collections|length }}</span>
+  </h2>
+  <a href="{% url 'entry_list' %}" class="btn btn-outline-secondary">← В коллекцию</a>
+</div>
+<p class="text-muted">Подборки — это списки фильмов внутри вашей коллекции: по жанру, настроению или для компании.</p>
+
+<form method="post" class="mb-4 d-flex gap-2 flex-wrap">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="create">
+  <input name="name" class="form-control" style="max-width:340px" maxlength="100"
+         placeholder="Название новой подборки" required>
+  <button class="btn btn-success">+ Создать подборку</button>
+</form>
+
+<div class="row">
+  {% for c in collections %}
+    <div class="col-6 col-md-4 col-xl-3 mb-3">
+      <div class="card h-100 hover-card">
+        <div class="card-body">
+          <a href="{% url 'collection_detail' c.pk %}" class="fw-semibold fs-5 text-decoration-none d-block text-truncate"
+             title="{{ c.name }}">{{ c.name }}</a>
+          <div class="text-muted small">{{ c.n }} фильмов</div>
+        </div>
+        <div class="card-footer bg-body border-top d-flex gap-2">
+          <form method="post" class="d-flex gap-1 flex-fill">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="rename">
+            <input type="hidden" name="id" value="{{ c.pk }}">
+            <input name="name" class="form-control form-control-sm" value="{{ c.name }}" maxlength="100">
+            <button class="btn btn-sm btn-outline-primary text-nowrap" title="Переименовать">💾</button>
+          </form>
+          <form method="post" onsubmit="return confirm('Удалить подборку «{{ c.name }}»? Фильмы останутся в коллекции.')">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="id" value="{{ c.pk }}">
+            <button class="btn btn-sm btn-outline-danger" title="Удалить подборку">🗑</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="col-12">
+      <div class="alert alert-secondary">Подборок пока нет — создайте первую формой выше.</div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

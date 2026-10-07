@@ -4,36 +4,11 @@
   <h2 class="mb-0">Моя коллекция
     <span class="badge bg-secondary fs-6">{{ entries|length }}</span>
   </h2>
-  <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
-</div>
-
-{% if popular %}
-<section class="mb-4">
-  <h5 class="mb-2">🔥 Популярное сейчас
-    <span class="text-muted fs-6 fw-normal">— по данным IMDb</span>
-  </h5>
-  <div class="popular-row">
-    {% for p in popular %}
-    <a class="pop-card card h-100 hover-card"
-       href="{% url 'tmdb_page' %}?q={{ p.title|urlencode }}"
-       title="Найти «{{ p.title }}» в базе">
-      {% if p.poster %}
-        <img src="{{ p.poster }}" class="poster" alt="{{ p.title }}" loading="lazy">
-      {% else %}
-        <div class="poster-ph">Нет постера</div>
-      {% endif %}
-      <div class="card-body p-2">
-        <div class="small fw-semibold text-truncate">{{ p.title }}</div>
-        <div class="d-flex justify-content-between small text-muted">
-          <span>{{ p.year|default:"—" }}</span>
-          {% if p.rating %}<span class="text-warning">★ {{ p.rating }}</span>{% endif %}
-        </div>
-      </div>
-    </a>
-    {% endfor %}
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'collections_page' %}" class="btn btn-outline-primary">🗂 Подборки</a>
+    <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
   </div>
-</section>
-{% endif %}
+</div>
 
 {# --- Поиск и фильтры (обновляются через htmx) --- #}
 <form id="filters" class="mb-4"
@@ -46,7 +21,7 @@
   <div class="row g-2">
     <div class="col-lg-5">
       <input id="q" name="q" value="{{ q }}" class="form-control"
-             placeholder="Название, режиссёр, жанр или тег..." autofocus>
+             placeholder="Название, режиссёр, жанр, тег или рецензия..." autofocus>
     </div>
     <div class="col-lg-3">
       <select id="status" name="status" class="form-select">
@@ -139,6 +114,34 @@
             <option value="">Любой</option>
             {% for value, label in types %}
               <option value="{{ value }}" {% if type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="fw-semibold mb-1">Мои рецензии</div>
+          <select name="review" class="form-select form-select-sm">
+            {% for value, label in reviews %}
+              <option value="{{ value }}" {% if review == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="fw-semibold mb-1">Где смотреть</div>
+          <select name="location" class="form-select form-select-sm">
+            {% for value, label in locations %}
+              <option value="{{ value }}" {% if location == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <div class="fw-semibold mb-1">Подборка</div>
+          <select name="collection" class="form-select form-select-sm">
+            <option value="">Все фильмы</option>
+            {% for c in collections %}
+              <option value="{{ c.pk }}" {% if collection == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.name }} ({{ c.n }})</option>
             {% endfor %}
           </select>
         </div>

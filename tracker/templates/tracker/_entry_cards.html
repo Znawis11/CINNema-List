@@ -16,6 +16,8 @@
           <span class="badge {% if e.status == 'watched' %}bg-success{% elif e.status == 'watching' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ e.get_status_display }}</span>
           {% if e.site_score %}<span class="badge bg-dark">★ {{ e.site_score }}</span>{% endif %}
           {% if e.rating %}<span class="badge bg-warning text-dark">⭐ {{ e.rating }}/5</span>{% endif %}
+          {% if e.location == 'streaming' %}<span class="badge bg-primary" title="Фильм на стриминге">🌐 Стриминг</span>{% else %}<span class="badge bg-secondary" title="Файл на вашем ПК">💻 Локально</span>{% endif %}
+          {% if e.review %}<span class="badge bg-light text-dark border" title="Есть своя рецензия">📝</span>{% endif %}
         </div>
         <div class="d-flex flex-wrap gap-1 mt-1">
           {% for g in e.title.genres.all|slice:':3' %}<span class="badge bg-light text-dark border">{{ g }}</span>{% endfor %}

@@ -97,16 +97,48 @@
         <dd class="col-sm-8">{{ cast|join:", " }}</dd>
         {% endif %}
 
-        {% if details.external_ids.imdb_id %}
+        <dt class="col-sm-4">Где смотреть</dt>
+        <dd class="col-sm-8">
+          {% if entry.location == 'streaming' %}
+            <span class="badge bg-primary">🌐 Стриминг</span>
+            {% if entry.streaming_url %}
+              <a href="{{ entry.streaming_url }}" target="_blank" rel="noopener">открыть страницу фильма</a>
+            {% else %}
+              <span class="text-muted">ссылка не указана</span>
+            {% endif %}
+          {% else %}
+            <span class="badge bg-secondary">💻 Локально</span>
+            {% if title.local_file %}<span class="small text-muted">файл назначен</span>
+            {% else %}<span class="small text-muted">файл ещё не назначен</span>{% endif %}
+          {% endif %}
+          <a class="ms-2 small" href="{% url 'entry_detail' entry.pk %}?tab=player">изменить</a>
+        </dd>
+
         <dt class="col-sm-4">Ссылки</dt>
         <dd class="col-sm-8">
-          <a href="https://www.imdb.com/title/{{ details.external_ids.imdb_id }}/" target="_blank" rel="noopener">IMDb</a>
-          {% if title.tmdb_id %}
-            · <a href="https://www.themoviedb.org/{{ title.tmdb_type|default:'movie' }}/{{ title.tmdb_id }}" target="_blank" rel="noopener">TMDB</a>
+          {% if title.imdb_id %}
+            <a href="https://www.imdb.com/title/{{ title.imdb_id }}/" target="_blank" rel="noopener">IMDb</a>
+          {% elif details.external_ids.imdb_id %}
+            <a href="https://www.imdb.com/title/{{ details.external_ids.imdb_id }}/" target="_blank" rel="noopener">IMDb</a>
           {% endif %}
+          {% if title.tmdb_id %}
+            {% if title.imdb_id or details.external_ids.imdb_id %} · {% endif %}
+            <a href="https://www.themoviedb.org/{{ title.tmdb_type|default:'movie' }}/{{ title.tmdb_id }}" target="_blank" rel="noopener">TMDB</a>
+          {% endif %}
+          {% if not title.imdb_id and not title.tmdb_id and not details.external_ids.imdb_id %}—{% endif %}
         </dd>
-        {% endif %}
       </dl>
+
+      <h6 class="mt-4">Моя оценка и рецензия</h6>
+      {% if entry.rating %}<div class="mb-1">⭐ {{ entry.rating }}/5</div>{% endif %}
+      {% if entry.review %}
+        <p>{{ entry.review|linebreaksbr }}</p>
+      {% else %}
+        <p class="text-muted mb-1">Рецензии пока нет.</p>
+      {% endif %}
+      <a href="{% url 'entry_detail' entry.pk %}?tab=tags" class="btn btn-sm btn-outline-primary">
+        {% if entry.review or entry.rating %}✏️ Изменить{% else %}✍️ Написать рецензию{% endif %}
+      </a>
 
     {# ============ ВКЛАДКА: ТЕГИ ============ #}
     {% elif tab == 'tags' %}
@@ -173,10 +205,18 @@
       </form>
       <p class="small text-muted mt-1">Теги общие для вашей коллекции — появятся в фильтрах поиска.</p>
 
-      {% if entry.review %}
-        <h6 class="mt-4">Рецензия</h6>
-        <p class="mb-0">{{ entry.review|linebreaksbr }}</p>
-      {% endif %}
+      <h6 class="mt-4">Моя рецензия</h6>
+      <form method="post" action="{% url 'entry_tags' entry.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="review">
+        <textarea name="review" class="form-control mb-2" rows="5"
+                  maxlength="10000"
+                  placeholder="Что запомнилось, стоит ли смотреть, для кого...">{{ entry.review }}</textarea>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <button class="btn btn-primary">💾 Сохранить рецензию</button>
+          <span class="small text-muted">Рецензия участвует в поиске и фильтре «Мои рецензии».</span>
+        </div>
+      </form>
 
     {# ============ ВКЛАДКА: СЕРИИ ============ #}
     {% elif tab == 'episodes' %}
@@ -261,7 +301,51 @@
 
     {# ============ ВКЛАДКА: ВИДЕОПЛЕЕР ============ #}
     {% else %}
-      {% include 'tracker/_player.html' %}
+      {# --- метка «где находится фильм» #}
+      <div class="card card-body mb-3">
+        <div class="fw-semibold mb-2">Где смотреть фильм</div>
+        <form method="post" action="{% url 'entry_location' entry.pk %}">
+          {% csrf_token %}
+          <div class="d-flex gap-4 flex-wrap">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="location" value="local"
+                     id="loc-local" {% if entry.location == 'local' %}checked{% endif %}>
+              <label class="form-check-label" for="loc-local">💻 Локально — файл на моём ПК</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="location" value="streaming"
+                     id="loc-streaming" {% if entry.location == 'streaming' %}checked{% endif %}>
+              <label class="form-check-label" for="loc-streaming">🌐 На стриминге — по ссылке</label>
+            </div>
+          </div>
+          <div class="mt-2">
+            <input name="streaming_url" class="form-control" style="max-width:560px"
+                   value="{{ entry.streaming_url }}"
+                   placeholder="https://... — страница фильма на стриминге">
+          </div>
+          <button class="btn btn-sm btn-primary mt-2">💾 Сохранить метку</button>
+        </form>
+      </div>
+
+      {% if entry.location == 'streaming' %}
+        <div class="alert alert-primary d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+          <span>Фильм хранится на стриминговом сервисе.</span>
+          {% if entry.streaming_url %}
+            <a href="{{ entry.streaming_url }}" target="_blank" rel="noopener"
+               class="btn btn-primary text-nowrap">▶ Смотреть на стриминге</a>
+          {% endif %}
+        </div>
+        {% if not entry.streaming_url %}
+          <div class="alert alert-warning">
+            Ссылка не указана — вставьте её в поле выше и нажмите «Сохранить метку».
+          </div>
+        {% endif %}
+        <p class="small text-muted">
+          Чтобы включить встроенный плеер, переключите метку на «Локально» и назначьте файл.
+        </p>
+      {% else %}
+        {% include 'tracker/_player.html' %}
+      {% endif %}
     {% endif %}
   </div>
 </div>

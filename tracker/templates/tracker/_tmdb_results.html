@@ -2,7 +2,7 @@
 {% for r in results %}
   <div class="col-md-3 mb-3">
     <div class="card h-100">
-      {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top">{% endif %}
+      {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top poster" alt="{{ r.title }}">{% endif %}
       <div class="card-body">
         <h5>{{ r.title }}</h5>
         <div class="text-muted small">
@@ -12,14 +12,28 @@
         {% if r.local %}<span class="badge bg-success">Скачан на ПК</span>{% endif %}
       </div>
       <div class="card-footer">
-        <form method="post" action="{% url 'tmdb_add' r.media_type r.id %}">
-          {% csrf_token %}
-          <button class="btn btn-sm btn-success">Добавить в коллекцию</button>
-        </form>
+        {% if r.added %}
+          <span class="badge bg-success">✓ Уже в коллекции</span>
+          <a href="{% url 'entry_detail' r.entry_pk %}" class="btn btn-sm btn-outline-secondary float-end">Открыть</a>
+        {% else %}
+          <form method="post" action="{% url 'tmdb_add' r.media_type r.id %}">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-success">Добавить в коллекцию</button>
+          </form>
+        {% endif %}
       </div>
     </div>
   </div>
 {% empty %}
-  {% if q %}<p>Ничего не найдено.</p>{% endif %}
+  {% if q %}
+    {% if offline %}
+      <div class="alert alert-warning mb-0">
+        Не удалось связаться с TMDB — проверьте подключение к интернету
+        и повторите поиск.
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">Ничего не найдено.</p>
+    {% endif %}
+  {% endif %}
 {% endfor %}
 </div>

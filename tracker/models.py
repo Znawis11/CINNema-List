@@ -48,11 +48,16 @@ class Entry(models.Model):
     STATUSES = [('watched', 'Просмотрено'),
                 ('watching', 'В процессе'),
                 ('planned', 'В планах')]
+    # где находится фильм: свой файл на ПК или стриминговый сервис
+    LOCATIONS = [('local', 'Локально (файл на ПК)'),
+                 ('streaming', 'Стриминг (по ссылке)')]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     title = models.ForeignKey(Title, on_delete=models.CASCADE)
     status = models.CharField(max_length=10, choices=STATUSES, default='planned')
     rating = models.PositiveSmallIntegerField(null=True, blank=True)
     review = models.TextField(blank=True)
+    location = models.CharField(max_length=10, choices=LOCATIONS, default='local')
+    streaming_url = models.URLField(blank=True)   # страница фильма на стриминге
     tags = models.ManyToManyField(Tag, blank=True)
     added_at = models.DateTimeField(auto_now_add=True)
     watched_at = models.DateField(null=True, blank=True)

@@ -1,4 +1,4 @@
-"""Временная проверка представлений нового UI."""
+﻿"""Временная проверка представлений нового UI."""
 import os
 import django
 
@@ -25,6 +25,9 @@ def check(name, cond, extra=''):
 r = c.get('/')
 check('главная 200', r.status_code == 200, r.status_code)
 check('строка IMDb', 'Популярное сейчас' in r.content.decode(), '')
+check('поиск на главной', '/tmdb/results/' in r.content.decode(), '')
+r = c.get('/collection/')
+check('коллекция 200', r.status_code == 200, r.status_code)
 check('нет дублей кнопок', r.content.decode().count('+ Добавить') == 1)
 
 e = Entry.objects.get(user__username='uitest', title__name='Матрица')
@@ -60,53 +63,63 @@ check('тег удалён', 'проверка-тега' not in list(e.tags.valu
 
 # поиск (htmx-фрагмент)
 hx = {'HTTP_HX_REQUEST': 'true'}
-r = c.get('/', {'q': 'матр'}, **hx)
+r = c.get('/collection/', {'q': 'матр'}, **hx)
 check('поиск матр', 'Матрица' in r.content.decode() and 'Интерстеллар' not in r.content.decode())
-r = c.get('/', {'q': 'нолан'}, **hx)
+r = c.get('/collection/', {'q': 'нолан'}, **hx)
 check('поиск по режиссёру', 'Интерстеллар' in r.content.decode())
 
 # фильтры
-r = c.get('/', {'status': 'planned'}, **hx)
+r = c.get('/collection/', {'status': 'planned'}, **hx)
 body = r.content.decode()
 check('фильтр статуса', 'Джокер' in body and 'Матрица' not in body)
-r = c.get('/', {'min_rating': '5'}, **hx)
+r = c.get('/collection/', {'min_rating': '5'}, **hx)
 body = r.content.decode()
-check('фильтр моей оценки', 'Матрица' in body and 'Интерстеллар' not in body)
-r = c.get('/', {'min_score': '8'}, **hx)
+check('фильтр моей оценки (пусто)', 'Ничего не найдено' in body)
+# ставим оценку 5 и проверяем, что фильтр её видит
+c.post(f'/entry/{e.pk}/tags/', {'action': 'rating', 'rating': '5'})
+r = c.get('/collection/', {'min_rating': '5'}, **hx)
 body = r.content.decode()
-check('фильтр рейтинга сайта', 'Матрица' in body and 'Джокер' not in body)
-r = c.get('/', {'dur': 'lt60'}, **hx)
+check('фильтр моей оценки', 'Матрица' in body and 'Интерстеллар' not in body, body[:200])
+c.post(f'/entry/{e.pk}/tags/', {'action': 'rating', 'rating': '0'})
+# рейтинг сайта: Матрица 8.7 / Интерстеллар 8.7 / Джокер 8.3
+r = c.get('/collection/', {'min_score': '8'}, **hx)
+body = r.content.decode()
+check('фильтр рейтинга сайта', 'Матрица' in body and 'Джокер' in body, body[:200])
+r = c.get('/collection/', {'min_score': '9'}, **hx)
+check('фильтр рейтинга сайта (пусто)', 'Ничего не найдено' in r.content.decode())
+r = c.get('/collection/', {'dur': 'lt60'}, **hx)
 check('фильтр длительности', r.content.decode().count('card h-100') == 0 or 'Ничего' in r.content.decode())
-r = c.get('/', {'type': 'series'}, **hx)
+r = c.get('/collection/', {'type': 'series'}, **hx)
 check('фильтр типа', 'Ничего не найдено' in r.content.decode())
-r = c.get('/', {'sort': 'year'}, **hx)
+r = c.get('/collection/', {'sort': 'year'}, **hx)
 check('сортировка по году', r.status_code == 200)
 
 # жанр-фильтр
 from tracker.models import Genre
 g = Genre.objects.get(name='Боевик')
-r = c.get('/', {'genres': [str(g.pk)]}, **hx)
+r = c.get('/collection/', {'genres': [str(g.pk)]}, **hx)
 body = r.content.decode()
 check('фильтр по жанру', 'Матрица' in body and 'Джокер' not in body)
 
 # тег-фильтр
 t = Tag.objects.filter(user__username='uitest').first()
-r = c.get('/', {'tags': [str(t.pk)]}, **hx)
+r = c.get('/collection/', {'tags': [str(t.pk)]}, **hx)
 check('фильтр по тегу', 'Матрица' in r.content.decode())
 
 # пустой/битый запрос не роняет страницу
-r = c.get('/', {'min_rating': 'abc', 'dur': 'zzz', 'sort': 'weird'}, **hx)
+r = c.get('/collection/', {'min_rating': 'abc', 'dur': 'zzz', 'sort': 'weird'}, **hx)
 check('битые параметры', r.status_code == 200, r.status_code)
 
-# поиск фильмов (tmdb-страница) и папки
+# поиск фильмов переехал на главную; старый адрес ведёт туда же
 r = c.get('/tmdb/?q=Матрица')
-check('страница поиска', r.status_code == 200, r.status_code)
+check('старый /tmdb/ -> главная', r.status_code == 302 and r.url.startswith('/?q='),
+      f'{r.status_code} {getattr(r, "url", "")}')
 r = c.get('/library/')
 check('страница папок', r.status_code == 200, r.status_code)
 
 # просмотр перенесён во вкладку плеера
 r = c.get(f'/watch/{e.title.pk}/')
-check('watch → плеер', r.status_code == 302 and '/entry/' in r.url and 'tab=player' in r.url,
+check('watch -> плеер', r.status_code == 302 and '/entry/' in r.url and 'tab=player' in r.url,
       f'{r.status_code} {getattr(r, "url", "")}')
 
 # добавление вручную: форма и сохранение
@@ -114,8 +127,53 @@ r = c.get('/entry/add/')
 check('форма добавления', r.status_code == 200, r.status_code)
 r = c.post('/entry/add/', {'name': 'Тестовый фильм', 'director': 'X', 'type': 'movie',
                            'year': '2020', 'status': 'planned', 'new_tags': 'тест1, тест2'})
-check('добавление вручную → карточка', r.status_code == 302 and '/entry/' in r.url,
+check('добавление вручную -> коллекция', r.status_code == 302 and r.url == '/collection/',
       f'{r.status_code} {getattr(r, "url", "")}')
+# убираем тестовый фильм за собой
+from tracker.models import Title as _T
+_T.objects.filter(name='Тестовый фильм').delete()
+
+# --- рецензии и метка «где находится фильм»
+from tracker.models import Collection
+e = Entry.objects.get(user__username='uitest', title__name='Матрица')
+c.post(f'/entry/{e.pk}/tags/', {'action': 'review', 'review': 'Отличный киберпанк.'})
+e.refresh_from_db()
+check('рецензия сохранена', e.review == 'Отличный киберпанк.', e.review)
+r = c.get('/collection/', {'q': 'Отличный киберпанк'}, **hx)
+check('поиск по рецензии', 'Матрица' in r.content.decode())
+r = c.get('/collection/', {'review': 'yes'}, **hx)
+check('фильтр «с рецензией»', 'Матрица' in r.content.decode())
+r = c.get('/collection/', {'review': 'no'}, **hx)
+check('фильтр «без рецензии»', 'Матрица' not in r.content.decode())
+c.post(f'/entry/{e.pk}/tags/', {'action': 'review', 'review': ''})
+
+c.post(f'/entry/{e.pk}/location/', {'location': 'streaming',
+                                    'streaming_url': 'kinopoisk.ru/film/301'})
+e.refresh_from_db()
+check('метка стриминг + ссылка', e.location == 'streaming'
+      and e.streaming_url == 'https://kinopoisk.ru/film/301',
+      f'{e.location} {e.streaming_url}')
+r = c.get(f'/entry/{e.pk}/?tab=player')
+check('плеер -> ссылка на стриминг', 'Смотреть на стриминге' in r.content.decode())
+r = c.get('/collection/', {'location': 'streaming'}, **hx)
+check('фильтр по метке', 'Матрица' in r.content.decode())
+c.post(f'/entry/{e.pk}/location/', {'action': 'x', 'location': 'local'})
+
+# --- подборки
+c.post('/collections/', {'action': 'create', 'name': 'Проверочная'})
+coll = Collection.objects.filter(user__username='uitest', name='Проверочная').first()
+check('подборка создана', coll is not None)
+if coll:
+    r = c.get('/collections/')
+    check('страница подборок', r.status_code == 200, r.status_code)
+    c.post(f'/collections/{coll.pk}/', {'action': 'add', 'entries': [str(e.pk)]})
+    r = c.get(f'/collections/{coll.pk}/')
+    check('страница подборки', r.status_code == 200 and 'Матрица' in r.content.decode())
+    r = c.get('/collection/', {'collection': str(coll.pk)}, **hx)
+    check('фильтр по подборке', 'Матрица' in r.content.decode())
+    c.post(f'/collections/{coll.pk}/', {'action': 'remove', 'entry': str(e.pk)})
+    c.post(f'/collections/{coll.pk}/', {'action': 'delete'})
+    check('подборка удалена', not Collection.objects.filter(pk=coll.pk).exists())
 
 print()
 print('Итого:', sum(1 for _, c_, _ in ok if c_), '/', len(ok), 'успешно')
