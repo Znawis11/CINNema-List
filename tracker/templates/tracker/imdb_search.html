@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Поиск по IMDb</h2>
+<input name="q" class="form-control mb-4" autofocus
+       placeholder="Название на английском, например Interstellar"
+       hx-get="{% url 'imdb_results' %}"
+       hx-trigger="keyup changed delay:500ms"
+       hx-target="#imdb-results">
+<div id="imdb-results"></div>
+{% endblock %}

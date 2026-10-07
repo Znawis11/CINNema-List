@@ -1,0 +1,23 @@
+<div class="row">
+{% for r in results %}
+  <div class="col-md-3 mb-3">
+    <div class="card h-100">
+      {% if r.Poster != 'N/A' %}<img src="{{ r.Poster }}" class="card-img-top">{% endif %}
+      <div class="card-body">
+        <h5>{{ r.Title }}</h5>
+        <div class="text-muted small">{{ r.Year }} · {{ r.Type }}</div>
+      </div>
+      <div class="card-footer">
+        <form method="post" action="{% url 'imdb_add' r.imdbID %}">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-success">Добавить в коллекцию</button>
+          <a href="https://www.imdb.com/title/{{ r.imdbID }}/" target="_blank"
+             class="btn btn-sm btn-outline-secondary">IMDb</a>
+        </form>
+      </div>
+    </div>
+  </div>
+{% empty %}
+  {% if q %}<p>Ничего не найдено.</p>{% endif %}
+{% endfor %}
+</div>

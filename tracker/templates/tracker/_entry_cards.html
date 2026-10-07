@@ -1,0 +1,23 @@
+<div class="row">
+{% for e in entries %}
+  <div class="col-md-3 mb-3">
+    <div class="card h-100">
+      {% if e.title.poster_url %}<img src="{{ e.title.poster_url }}" class="card-img-top">{% endif %}
+      <div class="card-body">
+        <h5>{{ e.title.name }}</h5>
+        <div class="text-muted small">{{ e.title.director }}{% if e.title.year %} · {{ e.title.year }}{% endif %}</div>
+        <span class="badge bg-secondary">{{ e.get_status_display }}</span>
+        {% for g in e.title.genres.all %}<span class="badge bg-info text-dark">{{ g }}</span>{% endfor %}
+        {% for t in e.tags.all %}<span class="badge bg-warning text-dark">#{{ t }}</span>{% endfor %}
+        {% if e.rating %}<div class="mt-1">⭐ {{ e.rating }}/5</div>{% endif %}
+      </div>
+      <div class="card-footer d-flex gap-2">
+        <a href="{% url 'entry_update' e.pk %}" class="btn btn-sm btn-outline-primary">Изменить</a>
+        <a href="{% url 'entry_delete' e.pk %}" class="btn btn-sm btn-outline-danger">Удалить</a>
+      </div>
+    </div>
+  </div>
+{% empty %}
+  <p>Ничего не найдено.</p>
+{% endfor %}
+</div>

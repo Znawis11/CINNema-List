@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Моя коллекция</h2>
+  <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить</a>
+      <div>
+    <a href="{% url 'imdb_page' %}" class="btn btn-warning">Найти в IMDb</a>
+    <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
+  </div>
+</div>
+
+<form class="row g-2 mb-4"
+      hx-get="{% url 'entry_list' %}"
+      hx-trigger="keyup changed delay:300ms from:#q, change from:#status"
+      hx-target="#results">
+  <div class="col-md-8">
+    <input id="q" name="q" value="{{ q }}" class="form-control"
+           placeholder="Название, режиссёр, жанр или тег..." autofocus>
+  </div>
+  <div class="col-md-4">
+    <select id="status" name="status" class="form-select">
+      <option value="">Все статусы</option>
+      <option value="watched">Просмотрено</option>
+      <option value="watching">В процессе</option>
+      <option value="planned">В планах</option>
+    </select>
+  </div>
+</form>
+
+<div id="results">
+  {% include 'tracker/_entry_cards.html' %}
+</div>
+{% endblock %}
