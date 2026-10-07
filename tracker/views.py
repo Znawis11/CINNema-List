@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.http import JsonResponse
 from django.utils import timezone
 from datetime import date, timedelta
+from urllib.parse import quote
 import re
 import mimetypes
 from pathlib import Path
@@ -181,6 +182,63 @@ def entry_delete(request, pk):
 
 # --- карточка фильма: вкладки «Информация», «Теги», «Видеоплеер» -------------
 
+def _series_ctx(request, entry, season=None):
+    """Сезоны и серии сериала (общие для вкладок «Серии» и «Видеоплеер»).
+
+    К каждой серии добавляются: watched_at (отметка пользователя) и
+    local_file (привязанный видеофайл).
+    """
+    title = entry.title
+    watched = {(e.season, e.number): e for e in entry.episodes.all()}
+    seasons, season_numbers = [], []
+    if title.tmdb_id:
+        d = tmdb.details('tv', title.tmdb_id)
+        if d:
+            seasons = [s for s in d.get('seasons', []) if s.get('season_number')]
+            season_numbers = [s['season_number'] for s in seasons]
+            total = d.get('number_of_episodes')
+            if total and title.total_episodes != total:
+                title.total_episodes = total
+                title.save(update_fields=['total_episodes'])
+
+    requested = season or request.GET.get('season', '')
+    if requested and str(requested).isdigit() and (
+            not season_numbers or int(requested) in season_numbers):
+        current = int(requested)
+    else:
+        # первый сезон, где ещё нет ни одной просмотренной серии
+        current = season_numbers[0] if season_numbers else 1
+        for sn in season_numbers:
+            if not any(k[0] == sn for k in watched):
+                current = sn
+                break
+
+    episodes = []
+    data = tmdb.season(title.tmdb_id, current) if title.tmdb_id else None
+    for ep in (data['episodes'] if data else []):
+        rec = watched.get((current, ep['number']))
+        episodes.append({**ep,
+                         'watched_at': rec.watched_at if rec else None,
+                         'local_file': rec.local_file if rec else '',
+                         'ep_pk': rec.pk if rec else None})
+    # серии, отмеченные вручную, но не найденные в TMDB (например, сбитый номер)
+    for (sn, num), rec in watched.items():
+        if sn == current and not any(e['number'] == num for e in episodes):
+            episodes.append({'number': num, 'name': f'Серия {num}',
+                             'runtime': None, 'air_date': '',
+                             'watched_at': rec.watched_at,
+                             'local_file': rec.local_file,
+                             'ep_pk': rec.pk})
+    episodes.sort(key=lambda e: e['number'])
+
+    return {
+        'seasons': seasons, 'season_numbers': season_numbers,
+        'current_season': current, 'episodes': episodes,
+        'watched_total': len(watched),
+        'no_tmdb': not title.tmdb_id,
+    }
+
+
 @login_required
 def entry_detail(request, pk):
     entry = get_object_or_404(Entry, pk=pk, user=request.user)
@@ -188,7 +246,8 @@ def entry_detail(request, pk):
 
     if request.method == 'POST':  # привязка видеофайла (вкладка «Видеоплеер»)
         path = request.POST.get('file', '')
-        if library.safe_path(library.user_folders(request.user), path):
+        if library.safe_path(library.user_folders(request.user), path) \
+                or library.resolve(path):
             title.local_file = path
             title.save(update_fields=['local_file'])
         return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=player")
@@ -222,50 +281,26 @@ def entry_detail(request, pk):
 
     else:  # player
         folders = library.user_folders(request.user)
-        if not library.safe_path(folders, title.local_file):
+        if not library.safe_path(folders, title.local_file) \
+                and not library.resolve(title.local_file):
             title.local_file = library.find(folders, title.name, title.original_name)
             title.save(update_fields=['local_file'])
         ctx['has_folders'] = bool(folders)
         ctx['files'] = [] if title.local_file else library.scan(folders)
 
+        if is_series:
+            # какая серия играет (?ep=<pk эпизода>)
+            current_ep = request.GET.get('ep', '')
+            playing = (entry.episodes.filter(pk=current_ep).first()
+                       if str(current_ep).isdigit() else None)
+            # сезон для списка: у играющей серии — её собственный
+            season = (playing.season if playing
+                      else request.GET.get('season'))
+            ctx.update(_series_ctx(request, entry, season=season))
+            ctx['playing'] = playing
+
     if tab == 'episodes':
-        watched = {(e.season, e.number): e.watched_at
-                   for e in entry.episodes.all()}
-        seasons, season_numbers = [], []
-        if title.tmdb_id:
-            d = tmdb.details('tv', title.tmdb_id)
-            if d:
-                seasons = [s for s in d.get('seasons', [])
-                           if s.get('season_number')]
-                season_numbers = [s['season_number'] for s in seasons]
-                total = d.get('number_of_episodes')
-                if total and title.total_episodes != total:
-                    title.total_episodes = total
-                    title.save(update_fields=['total_episodes'])
-
-        requested = request.GET.get('season', '')
-        if requested.isdigit() and (not season_numbers
-                                    or int(requested) in season_numbers):
-            current = int(requested)
-        else:
-            # первый сезон, где ещё нет ни одной просмотренной серии
-            current = season_numbers[0] if season_numbers else 1
-            for sn in season_numbers:
-                if not any(k[0] == sn for k in watched):
-                    current = sn
-                    break
-
-        episodes = []
-        data = tmdb.season(title.tmdb_id, current) if title.tmdb_id else None
-        for ep in (data['episodes'] if data else []):
-            episodes.append({**ep, 'watched_at': watched.get((current, ep['number']))})
-
-        ctx.update({
-            'seasons': seasons, 'season_numbers': season_numbers,
-            'current_season': current, 'episodes': episodes,
-            'watched_total': len(watched),
-            'no_tmdb': not title.tmdb_id,
-        })
+        ctx.update(_series_ctx(request, entry))
 
     return render(request, 'tracker/entry_detail.html', ctx)
 
@@ -332,7 +367,162 @@ def entry_episodes(request, pk):
             entry.status = 'watched'
             entry.watched_at = timezone.localdate()
             entry.save(update_fields=['status', 'watched_at'])
+    if request.headers.get('X-Fetch'):  # авто-отметка из плеера
+        return JsonResponse({'ok': True})
     return redirect(back)
+
+
+# --- выбор видеофайла: системный диалог + проводник ---------------------------
+
+def _bind_path(request, entry, chosen, season='', number=''):
+    """Привязать файл к фильму или к серии; возвращает URL возврата."""
+    back = f"{reverse('entry_detail', args=[entry.pk])}?tab=player"
+    if season.isdigit() and number.isdigit():
+        ep, _ = Episode.objects.get_or_create(
+            entry=entry, season=int(season), number=int(number))
+        ep.local_file = chosen
+        ep.save(update_fields=['local_file'])
+        # сразу открываем плеер на этой серии
+        back += f'&season={season}&ep={ep.pk}'
+    else:
+        entry.title.local_file = chosen
+        entry.title.save(update_fields=['local_file'])
+    return back
+
+
+def _pick_query(season='', number=''):
+    """Query-строка для возврата season/number в URL ('' — если их нет)."""
+    parts = []
+    if season.isdigit():
+        parts.append(f'season={season}')
+    if number.isdigit():
+        parts.append(f'number={number}')
+    return ('?' + '&'.join(parts)) if parts else ''
+
+
+@login_required
+@require_POST
+def file_match(request, pk):
+    """Системный диалог выбора файла.
+
+    Браузер не отдаёт путь выбранного файла — присылает имя и размер,
+    сервер сам находит файл на диске. Нашёл один — привязывает сразу,
+    нашёл несколько — отдаёт список, ничего не нашёл — уводит в проводник.
+    """
+    entry = get_object_or_404(Entry, pk=pk, user=request.user)
+    season = request.POST.get('season', '')
+    number = request.POST.get('number', '')
+    name = (request.POST.get('name') or '').strip()
+    try:
+        size = int(request.POST.get('size') or 0)
+    except ValueError:
+        size = 0
+    extra = _pick_query(season, number)          # '?season=1&number=2' или ''
+
+    if not name or Path(name).name != name:
+        return redirect(f"{reverse('file_pick', args=[entry.pk])}{extra}")
+
+    found = library.locate(name, size if size > 0 else None,
+                            _search_roots(request.user))
+
+    if len(found) == 1:
+        return redirect(_bind_path(request, entry, str(found[0]), season, number))
+
+    if extra:                     # extra уже начинается с '?'
+        extra = '&' + extra[1:]
+    if len(found) > 1:
+        return redirect(f"{reverse('file_match_list', args=[entry.pk])}"
+                        f"?name={quote(name)}&size={size}{extra}")
+    # не нашли — даём запасной выбор по папкам
+    return redirect(f"{reverse('file_pick', args=[entry.pk])}"
+                    f"?miss={quote(name)}{extra}")
+
+
+def _search_roots(user):
+    """Корни поиска: подключённые папки, домашняя папка, внешние диски."""
+    roots = list(library.user_folders(user))
+    home = str(Path.home())
+    if home not in roots:
+        roots.append(home)
+    volumes = Path('/Volumes')
+    if volumes.is_dir():
+        roots += [str(v) for v in volumes.iterdir() if v.is_dir()]
+    return roots
+
+
+@login_required
+def file_match_list(request, pk):
+    """Нашлось несколько одноимённых файлов — выбрать нужный."""
+    entry = get_object_or_404(Entry, pk=pk, user=request.user)
+    name = request.GET.get('name', '').strip()
+    try:
+        size = int(request.GET.get('size') or 0)
+    except ValueError:
+        size = 0
+    season = request.GET.get('season', '')
+    number = request.GET.get('number', '')
+    found = [str(p) for p in library.locate(name, size if size > 0 else None,
+                                            _search_roots(request.user),
+                                            limit=20)]
+    if len(found) == 1:
+        return redirect(_bind_path(request, entry, found[0], season, number))
+    if not found:
+        back = _pick_query(season, number)
+        if back:
+            back = '&' + back[1:]
+        return redirect(f"{reverse('file_pick', args=[entry.pk])}"
+                        f"?miss={quote(name)}{back}")
+    return render(request, 'tracker/file_match_list.html', {
+        'entry': entry, 'name': name, 'found': found,
+        'season': season, 'number': number,
+        'back': _pick_query(season, number)})
+
+
+@login_required
+def file_pick(request, pk):
+    """Проводник: навигация по папкам и выбор видеофайла (mp4/mkv/avi).
+
+    Привязывает файл к фильму, а с параметром season/number — к конкретной
+    серии. Это запасной путь: основной — системный диалог (file_match).
+    """
+    entry = get_object_or_404(Entry, pk=pk, user=request.user)
+    raw = request.GET.get('path') or request.POST.get('path') or ''
+    try:
+        p = Path(raw or Path.home()).expanduser().resolve()
+    except OSError:
+        p = Path.home()
+    if not p.is_dir():
+        p = Path.home()
+
+    dirs, files = [], []
+    try:
+        for child in sorted(p.iterdir(), key=lambda d: (not d.is_dir(), d.name.lower())):
+            if child.name.startswith('.'):
+                continue
+            if child.is_dir():
+                dirs.append(child)
+            elif child.suffix.lower() in library.PICK_EXT:
+                files.append(child)
+    except PermissionError:
+        pass
+
+    season = request.GET.get('season') or request.POST.get('season') or ''
+    number = request.GET.get('number') or request.POST.get('number') or ''
+    miss = request.GET.get('miss', '')
+    error = ''
+
+    if request.method == 'POST':   # выбрали файл в списке — привязываем
+        chosen = request.POST.get('file', '')
+        if library.resolve(chosen):
+            return redirect(_bind_path(request, entry, chosen, season, number))
+        error = 'Этот файл взять нельзя: нужен видеофайл mp4, mkv или avi.'
+
+    ctx = {'path': p, 'dirs': dirs, 'files': files, 'entry': entry,
+           'season': season, 'number': number, 'error': error, 'miss': miss,
+           'parent': p.parent if p.parent != p else None,
+           'qseason': f'&season={season}' if season.isdigit() else '',
+           'qnumber': f'&number={number}' if number.isdigit() else ''}
+    return render(request, 'tracker/file_pick.html', ctx)
 
 
 # --- учёт времени просмотра (пишется плеером) --------------------------------
@@ -442,10 +632,30 @@ def watch(request, pk):
     return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=player")
 
 
+def _path_for_stream(request, title, ep_pk=None):
+    """Файл, который можно отдать: у серии — свой, иначе общий у фильма.
+
+    Пути берутся из БД, не из запроса, поэтому достаточно проверки
+    существования файла и его расширения (library.resolve). Файлы вне
+    подключённых папок тоже разрешены — их привязал сам владелец.
+    """
+    if ep_pk:
+        ep = (Episode.objects.select_related('entry')
+              .filter(pk=ep_pk, entry__user=request.user).first())
+        if not ep:
+            return None
+        return (library.resolve(ep.local_file)
+                or library.safe_path(library.user_folders(request.user),
+                                     ep.local_file))
+    return (library.resolve(title.local_file)
+            or library.safe_path(library.user_folders(request.user),
+                                 title.local_file))
+
+
 @login_required
-def stream(request, pk):
+def stream(request, pk, ep_pk=None):
     title = get_object_or_404(Title, pk=pk)
-    path = library.safe_path(library.user_folders(request.user), title.local_file)
+    path = _path_for_stream(request, title, ep_pk)
     if not path:
         raise Http404
     size = path.stat().st_size

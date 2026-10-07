@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-1">Выбор видеофайла</h2>
+<p class="text-muted mb-3">Фильм: <b>{{ entry.title.name }}</b>
+  {% if season|default:'' %} · сезон {{ season }}, серия {{ number }}{% endif %}
+  <span class="ms-2">· форматы: mp4, mkv, avi</span></p>
+
+{% if miss %}
+  <div class="alert alert-warning py-2">
+    Файл <b>{{ miss }}</b> автоматически не нашёлся. Откройте системный диалог ещё раз
+    или найдите его вручную, пройдя по папкам ниже.
+  </div>
+{% endif %}
+{% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
+
+<div class="d-flex gap-2 flex-wrap align-items-center mb-3">
+  {% include 'tracker/_file_dialog.html' with class='btn-primary' label='📁 Открыть системный диалог…' %}
+  <span class="text-muted small">проще и быстрее — файл найдётся сам</span>
+  <a class="btn btn-sm btn-outline-danger ms-auto" href="{% url 'entry_detail' entry.pk %}?tab=player">Отмена</a>
+</div>
+
+<hr class="my-3">
+<p class="text-muted small mb-2">Если диалог не помог — пройдите по папкам вручную:</p>
+
+<nav aria-label="Хлебные крошки">
+  <ol class="breadcrumb font-monospace mb-2">
+    <li class="breadcrumb-item"><a href="{% url 'file_pick' entry.pk %}?path={{ path|urlencode }}{{ qseason }}{{ qnumber }}">📁 {{ path }}</a></li>
+  </ol>
+</nav>
+
+<div class="d-flex gap-2 flex-wrap mb-3">
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'file_pick' entry.pk %}?path={{ path|urlencode }}{{ qseason }}{{ qnumber }}">🔄 Обновить</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'file_pick' entry.pk %}?path=/{{ qseason }}{{ qnumber }}">💾 Корень диска</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'file_pick' entry.pk %}?path=/Volumes{{ qseason }}{{ qnumber }}">💾 Внешние диски</a>
+  {% if parent %}
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'file_pick' entry.pk %}?path={{ parent|urlencode }}{{ qseason }}{{ qnumber }}">⬆ Наверх</a>
+  {% endif %}
+</div>
+
+<div class="row g-2 mb-4">
+  {% for d in dirs %}
+    <div class="col-6 col-md-4 col-lg-3">
+      <a class="list-group-item list-group-item-action text-truncate"
+         href="{% url 'file_pick' entry.pk %}?path={{ d|urlencode }}{{ qseason }}{{ qnumber }}"
+         title="{{ d }}">📁 {{ d.name }}</a>
+    </div>
+  {% empty %}
+    <p class="text-muted">Вложенных папок нет.</p>
+  {% endfor %}
+</div>
+
+{% if files %}
+  <h6>Видеофайлы в этой папке</h6>
+  <div class="list-group mb-4">
+    {% for f in files %}
+      <form method="post" action="{% url 'file_pick' entry.pk %}" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="path" value="{{ path }}">
+        <input type="hidden" name="file" value="{{ f }}">
+        {% if season %}<input type="hidden" name="season" value="{{ season }}">{% endif %}
+        {% if number %}<input type="hidden" name="number" value="{{ number }}">{% endif %}
+        <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center w-100 text-start">
+          <span class="text-truncate">🎬 {{ f.name }}</span>
+          <span class="badge bg-primary ms-2">Выбрать</span>
+        </button>
+      </form>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="text-muted">Видеофайлов (mp4/mkv/avi) в этой папке нет — зайдите в подпапку.</p>
+{% endif %}
+
+<p class="small text-muted">
+  Файл может лежать где угодно, подключать папку не обязательно.
+  Форматы mkv/avi браузер часто не воспроизводит — при проблемах конвертируйте в mp4.
+</p>
+{% endblock %}

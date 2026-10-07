@@ -69,6 +69,7 @@ class Episode(models.Model):
     season = models.PositiveIntegerField()
     number = models.PositiveIntegerField()
     watched_at = models.DateField(null=True, blank=True)
+    local_file = models.CharField(max_length=500, blank=True)  # свой файл у серии
 
 
 class Collection(models.Model):

@@ -1,6 +1,51 @@
-{% if title.local_file %}
-  <video controls autoplay class="w-100 bg-black rounded" style="max-height:70vh" id="playerVideo">
-    <source src="{% url 'stream' title.pk %}">
+{% if title.local_file or playing or is_series %}
+  {% if is_series %}
+    {# --- панель выбора серии #}
+    <div class="card mb-3">
+      <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+          <span class="small text-muted">Серия:</span>
+          {% if season_numbers|length > 1 %}
+            <div class="btn-group btn-group-sm" role="group" aria-label="Сезоны">
+              {% for sn in season_numbers %}
+                <a class="btn btn-outline-secondary {% if sn == current_season %}active{% endif %}"
+                   href="?tab=player&season={{ sn }}{% if playing %}&ep={{ playing.pk }}{% endif %}">С{{ sn }}</a>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% if playing %}
+            <span class="badge bg-primary">Играет: S{{ playing.season }}E{{ playing.number }}</span>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-1">
+          {% for ep in episodes %}
+            {% if ep.local_file %}
+              <a class="btn btn-sm btn-outline-primary"
+                 href="?tab=player&season={{ current_season }}&ep={{ ep.ep_pk }}"
+                 title="{{ ep.name }}{% if ep.watched_at %} · просмотрена {{ ep.watched_at|date:'d.m.Y' }}{% endif %}">
+                {% if ep.watched_at %}✓{% else %}▶{% endif %} E{{ ep.number }}
+              </a>
+            {% else %}
+              <button class="btn btn-sm btn-outline-secondary"
+                      onclick="fileDialog(this, '{{ current_season }}', '{{ ep.number }}', '{% url 'file_match' entry.pk %}')"
+                      title="{{ ep.name }} — назначить файл через системный диалог">📁 E{{ ep.number }}</button>
+            {% endif %}
+          {% empty %}
+            <span class="text-muted small">Список серий недоступен (нет данных TMDB).</span>
+          {% endfor %}
+        </div>
+        <div class="small text-muted mt-2">
+          ▶ — есть файл, 📁 — назначить файл серии, ✓ — просмотрена.
+          Серия помечается просмотренной автоматически, когда видео доигрывает до конца.
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if title.local_file or playing %}
+  <video controls autoplay class="w-100 bg-black rounded" style="max-height:70vh" id="playerVideo"
+         {% if playing %}data-ep="{{ playing.pk }}" data-season="{{ playing.season }}" data-number="{{ playing.number }}"{% endif %}>
+    <source src="{% if playing %}{% url 'stream_ep' title.pk playing.pk %}{% else %}{% url 'stream' title.pk %}{% endif %}">
     Браузер не поддерживает это видео.
   </video>
   <script>
@@ -22,29 +67,97 @@
       video.addEventListener('pause', stop);
       video.addEventListener('ended', stop);
       window.addEventListener('beforeunload', () => timer && send());
+
+      // --- серии: отметка «просмотрена», когда видео досмотрено до конца
+      const toast = document.createElement('div');
+      toast.className = 'position-fixed bottom-0 end-0 p-3';
+      toast.style.zIndex = 1080;
+      toast.innerHTML = '<div class="toast show bg-success text-white" role="alert">' +
+                        '<div class="toast-body"></div></div>';
+      let toastTimer = null;
+      const say = (msg) => {
+        toast.querySelector('.toast-body').textContent = msg;
+        document.body.appendChild(toast);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.remove(), 3500);
+      };
+      let marked = false;
+      const markWatched = () => {
+        if (!video.dataset.ep || marked) return;
+        marked = true;
+        const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        fetch("{% url 'entry_episodes' entry.pk %}", {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrf, 'X-Fetch': '1' },
+          body: new URLSearchParams({
+            action: 'watch',
+            season: video.dataset.season,
+            number: video.dataset.number,
+          }),
+        }).then(r => { if (r.ok) say('Серия ' + video.dataset.number + ' отмечена просмотренной'); });
+      };
+      // досмотрели до конца
+      video.addEventListener('ended', markWatched);
+      // страховка: >= 95% длительности
+      video.addEventListener('timeupdate', () => {
+        if (video.duration && video.currentTime / video.duration >= 0.95) markWatched();
+      });
     })();
   </script>
-  <div class="d-flex justify-content-between align-items-center gap-2 mt-2">
-    <span class="text-muted small text-truncate" title="{{ title.local_file }}">Файл: {{ title.local_file }}</span>
-    <button class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="collapse"
-            data-bs-target="#pickFile">Другой файл</button>
+  <div class="d-flex justify-content-between align-items-center gap-2 mt-2 flex-wrap">
+    <span class="text-muted small text-truncate" title="{{ playing.local_file|default:title.local_file }}">
+      Файл: {{ playing.local_file|default:title.local_file|default:"—" }}</span>
+    <span class="d-flex gap-2">
+      {% if playing %}
+        {% include 'tracker/_file_dialog.html' with season=playing.season number=playing.number class='btn-sm btn-outline-primary' label='📁 Файл этой серии' %}
+      {% else %}
+        {% include 'tracker/_file_dialog.html' with class='btn-sm btn-outline-primary' label='📁 Заменить файл…' %}
+      {% endif %}
+      <a class="btn btn-sm btn-outline-secondary text-nowrap"
+         href="{% url 'file_pick' entry.pk %}{% if playing %}?season={{ playing.season }}&number={{ playing.number }}{% endif %}">Искать по папкам</a>
+    </span>
   </div>
-  <div class="collapse mt-2" id="pickFile">
-    {% include 'tracker/_file_form.html' %}
+  <div class="mt-2">
+    <button class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="collapse"
+            data-bs-target="#pickFile">Другой файл из папок</button>
+    <div class="collapse mt-2" id="pickFile">
+      {% include 'tracker/_file_form.html' %}
+    </div>
   </div>
   <p class="text-muted small mt-2 mb-0">
     Если видео не играет, файл, скорее всего, в формате mkv/avi: сконвертируйте в mp4.
   </p>
+  {% else %}
+    <div class="alert alert-info mb-0">
+      Файл для этого сериала ещё не назначен — выберите серию выше и нажмите 📁 у неё,
+      либо назначьте общий файл кнопкой ниже.
+      <div class="mt-2">
+        {% include 'tracker/_file_dialog.html' with class='btn-sm btn-primary' label='📁 Выбрать файл…' %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'file_pick' entry.pk %}">Искать по папкам</a>
+      </div>
+    </div>
+    <div class="mt-2">
+      <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse"
+              data-bs-target="#pickFile">Файл из подключённых папок</button>
+      <div class="collapse mt-2" id="pickFile">
+        {% include 'tracker/_file_form.html' %}
+      </div>
+    </div>
+  {% endif %}
 {% else %}
   {% if not has_folders %}
     <div class="alert alert-info">
       Сначала укажите папки с фильмами — файл подберётся автоматически.
       <div class="mt-2">
-        <a href="{% url 'library_page' %}" class="btn btn-sm btn-primary">Мои папки</a>
+        <a class="btn btn-sm btn-primary" href="{% url 'library_page' %}">Мои папки</a>
       </div>
     </div>
   {% else %}
     <p class="text-muted">Файл автоматически не найден. Выберите вручную:</p>
     {% include 'tracker/_file_form.html' %}
+    <p class="small text-muted mt-2 mb-0">
+      Или найдите файл в проводнике — кнопка «Выбрать файл на диске…».
+      Подключать папку не обязательно.
+    </p>
   {% endif %}
 {% endif %}

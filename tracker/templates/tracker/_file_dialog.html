@@ -1,0 +1,14 @@
+{# Кнопка «выбрать файл»: открывает системный диалог (нативный проводник).
+   Путь браузер серверу не отдаёт — шлём имя и размер, сервер сам находит
+   файл на диске (views.file_match). season/number — привязка к серии. #}
+<span class="file-dialog d-inline-flex">
+  <input type="file" accept=".mp4,.mkv,.avi,video/*" class="d-none"
+         data-action="{% url 'file_match' entry.pk %}"
+         data-season="{{ season }}" data-number="{{ number }}">
+  <button type="button"
+          class="btn {{ class|default:'btn-sm btn-outline-primary' }}"
+          onclick="fileDialog(this)"
+          title="Откроется системный диалог выбора файла (mp4, mkv, avi)">
+    {{ label|default:'📁 Выбрать файл…' }}
+  </button>
+</span>

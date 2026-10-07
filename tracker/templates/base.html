@@ -90,5 +90,48 @@
 <div class="container pb-5">
   {% block content %}{% endblock %}
 </div>
+<input type="file" id="fileDialogInput" accept=".mp4,.mkv,.avi,video/*" class="d-none">
+<script>
+// Системный диалог выбора файла: браузер не отдаёт серверу путь к файлу,
+// поэтому шлём имя и размер — сервер сам найдёт файл на диске и привяжет.
+function fileDialog(btn, season, number, action) {
+  const wrap = btn.closest('.file-dialog');
+  let input = wrap && wrap.querySelector('input[type=file]');
+  // кнопки вне .file-dialog (например, серия в плеере) используют скрытый общий input
+  if (!input) {
+    input = document.getElementById('fileDialogInput');
+    if (!input) return;
+  }
+  input.value = '';
+  input.onchange = () => {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    const body = new URLSearchParams({ name: f.name, size: String(f.size) });
+    const s = season || input.dataset.season;
+    const n = number || input.dataset.number;
+    if (s) body.set('season', s);
+    if (n) body.set('number', n);
+    const url = action || input.dataset.action;
+    if (!url) return;
+    const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    const label = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Ищу файл…';
+    fetch(url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf },
+      body: body,
+      redirect: 'follow',
+    })
+      .then(r => { window.location = r.url || '/'; })
+      .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = label;
+        alert('Не получилось найти файл. Попробуйте выбрать его по папкам.');
+      });
+  };
+  input.click();
+}
+</script>
 </body>
 </html>

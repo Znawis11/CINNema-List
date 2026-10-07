@@ -1,8 +1,10 @@
-<form method="post" action="{% url 'entry_detail' entry.pk %}?tab=player" class="d-flex gap-2">
+<form method="post" action="{% url 'entry_detail' entry.pk %}?tab=player" class="d-flex gap-2 flex-wrap align-items-center">
   {% csrf_token %}
-  <select name="file" class="form-select form-select-sm">
-    {% for f in files %}<option value="{{ f }}">{{ f }}</option>
-    {% empty %}<option disabled>В указанных папках нет видео</option>{% endfor %}
+  <select name="file" class="form-select form-select-sm" style="max-width:420px">
+    {% for f in files %}<option value="{{ f }}">{{ f }}</option>{% empty %}<option disabled>В указанных папках нет видео</option>{% endfor %}
   </select>
-  <button class="btn btn-sm btn-primary text-nowrap">Привязать файл</button>
+  <button class="btn btn-sm btn-secondary text-nowrap" {% if not files %}disabled{% endif %}>Привязать из папок</button>
+  {% include 'tracker/_file_dialog.html' with class='btn-sm btn-primary' label='📁 Выбрать файл…' %}
+  <a class="btn btn-sm btn-outline-secondary text-nowrap"
+     href="{% url 'file_pick' entry.pk %}">Искать по папкам</a>
 </form>

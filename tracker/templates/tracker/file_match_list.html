@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-1">Нашлось несколько файлов</h2>
+<p class="text-muted mb-3">По имени <b>{{ name }}</b> нашлись разные файлы — выберите нужный:</p>
+
+<div class="list-group mb-3">
+  {% for p in found %}
+    <form method="post" action="{% url 'file_pick' entry.pk %}" class="m-0">
+      {% csrf_token %}
+      <input type="hidden" name="file" value="{{ p }}">
+      {% if season %}<input type="hidden" name="season" value="{{ season }}">{% endif %}
+      {% if number %}<input type="hidden" name="number" value="{{ number }}">{% endif %}
+      <button class="list-group-item list-group-item-action text-break text-start w-100">
+        🎬 {{ p }}
+      </button>
+    </form>
+  {% endfor %}
+</div>
+
+<div class="d-flex gap-2">
+  <a class="btn btn-outline-secondary" href="{% url 'file_pick' entry.pk %}{{ back }}">Искать по папкам</a>
+  <a class="btn btn-outline-danger" href="{% url 'entry_detail' entry.pk %}?tab=player">Отмена</a>
+</div>
+{% endblock %}
