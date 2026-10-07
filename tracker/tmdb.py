@@ -26,6 +26,7 @@ def search(query):
             'id': r['id'],
             'media_type': r['media_type'],
             'title': r.get('title') or r.get('name') or '',
+            'original': r.get('original_title') or r.get('original_name') or '',
             'year': date[:4],
             'poster': IMG + r['poster_path'] if r.get('poster_path') else '',
             'rating': round(r.get('vote_average', 0), 1),

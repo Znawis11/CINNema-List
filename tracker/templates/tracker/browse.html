@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Выбор папки</h2>
+<p class="font-monospace">{{ path }}</p>
+
+<form method="post" action="{% url 'library_page' %}" class="mb-3">
+  {% csrf_token %}
+  <input type="hidden" name="path" value="{{ path }}">
+  <button class="btn btn-success">Выбрать эту папку</button>
+  <a href="{% url 'library_page' %}" class="btn btn-secondary">Отмена</a>
+</form>
+
+<div class="list-group mb-4">
+  <a class="list-group-item list-group-item-action" href="{% url 'browse' %}">🏠 Домашняя папка</a>
+  <a class="list-group-item list-group-item-action" href="{% url 'browse' %}?path=/Volumes">💾 Внешние диски</a>
+  {% if parent %}
+    <a class="list-group-item list-group-item-action" href="{% url 'browse' %}?path={{ parent|urlencode }}">⬆ Наверх</a>
+  {% endif %}
+  {% for d in dirs %}
+    <a class="list-group-item list-group-item-action" href="{% url 'browse' %}?path={{ d|urlencode }}">📁 {{ d.name }}</a>
+  {% empty %}
+    <div class="list-group-item text-muted">Вложенных папок нет</div>
+  {% endfor %}
+</div>
+{% endblock %}

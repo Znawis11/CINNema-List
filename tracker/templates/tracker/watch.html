@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ title.name }}</h2>
+{% if title.local_file %}
+  <video controls autoplay class="w-100 bg-black rounded" style="max-height:75vh">
+    <source src="{% url 'stream' title.pk %}">
+    Браузер не поддерживает это видео.
+  </video>
+  <p class="text-muted mt-2">Файл: {{ title.local_file }}</p>
+  <p class="text-muted small">Если видео не играет, файл, скорее всего, в формате mkv/avi: сконвертируйте в mp4.</p>
+{% else %}
+  {% if not has_folders %}
+    <p>Сначала укажите папки с фильмами.</p>
+    <a href="{% url 'library_page' %}" class="btn btn-primary">Мои папки</a>
+  {% else %}
+    <p>Файл автоматически не найден. Выберите вручную:</p>
+    <form method="post">
+      {% csrf_token %}
+      <select name="file" class="form-select mb-2">
+        {% for f in files %}<option value="{{ f }}">{{ f }}</option>
+        {% empty %}<option disabled>В указанных папках нет видео</option>{% endfor %}
+      </select>
+      <button class="btn btn-primary">Привязать файл</button>
+    </form>
+  {% endif %}
+{% endif %}
+<a href="{% url 'entry_list' %}" class="btn btn-secondary mt-3">Назад</a>
+{% endblock %}

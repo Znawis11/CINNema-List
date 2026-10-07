@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Мои папки с фильмами</h2>
+<p class="text-muted">Найдено видеофайлов: <b>{{ count }}</b>. Указывайте папки с фильмами, а не весь диск целиком, так поиск работает быстрее.</p>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="post" class="row g-2 mb-3">
+  {% csrf_token %}
+  <div class="col-md-8">
+    <input name="path" class="form-control" placeholder="/Users/имя/Movies или /Volumes/Диск/Фильмы">
+  </div>
+  <div class="col-md-4">
+    <button class="btn btn-success">Добавить путь</button>
+    <a href="{% url 'browse' %}" class="btn btn-outline-primary">Выбрать на диске</a>
+  </div>
+</form>
+
+<ul class="list-group mb-4">
+{% for f in folders %}
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    {{ f.path }}
+    <form method="post" class="m-0">{% csrf_token %}
+      <input type="hidden" name="action" value="remove">
+      <input type="hidden" name="id" value="{{ f.pk }}">
+      <button class="btn btn-sm btn-outline-danger">Убрать</button>
+    </form>
+  </li>
+{% empty %}
+  <li class="list-group-item">Папок пока нет.</li>
+{% endfor %}
+</ul>
+<a href="{% url 'entry_list' %}" class="btn btn-secondary">Назад</a>
+{% endblock %}
