@@ -131,3 +131,6 @@ MAILERS = {
 }
 
 TMDB_API_KEY = '637aba21ba668f38b983e72673e462ec'
+
+from pathlib import Path as _P
+MEDIA_LIBRARY_DIR = _P.home() / 'Movies'   # папка, где лежат фильмы

@@ -21,6 +21,8 @@ class Title(models.Model):
     tmdb_id = models.IntegerField(null=True, blank=True)
     tmdb_type = models.CharField(max_length=10, blank=True)  # movie или tv
     imdb_id = models.CharField(max_length=15, blank=True)
+    original_name = models.CharField(max_length=255, blank=True)
+    local_file = models.CharField(max_length=500, blank=True)
 
     def __str__(self):
         return self.name
@@ -68,3 +70,14 @@ class Collection(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class LibraryFolder(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    path = models.CharField(max_length=500)
+
+    class Meta:
+        unique_together = ('user', 'path')
+
+    def __str__(self):
+        return self.path

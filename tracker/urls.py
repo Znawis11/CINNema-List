@@ -10,4 +10,8 @@ urlpatterns = [
     path('tmdb/', views.tmdb_page, name='tmdb_page'),
     path('tmdb/results/', views.tmdb_results, name='tmdb_results'),
     path('tmdb/add/<str:media_type>/<int:tmdb_id>/', views.tmdb_add, name='tmdb_add'),
+    path('watch/<int:pk>/', views.watch, name='watch'),
+    path('stream/<int:pk>/', views.stream, name='stream'),
+    path('library/', views.library_page, name='library_page'),
+    path('library/browse/', views.browse, name='browse'),
 ]

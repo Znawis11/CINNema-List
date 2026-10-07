@@ -9,6 +9,7 @@
           {{ r.year }} · {% if r.media_type == 'tv' %}сериал{% else %}фильм{% endif %}
           {% if r.rating %}· ⭐ {{ r.rating }}{% endif %}
         </div>
+        {% if r.local %}<span class="badge bg-success">Скачан на ПК</span>{% endif %}
       </div>
       <div class="card-footer">
         <form method="post" action="{% url 'tmdb_add' r.media_type r.id %}">

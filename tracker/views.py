@@ -2,11 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
-from .models import Entry
-from .forms import EntryForm
+import re
+import mimetypes
+from pathlib import Path
+from django.http import StreamingHttpResponse, Http404
 from django.views.decorators.http import require_POST
-from .models import Entry, Title, Genre
-from . import tmdb
+from .forms import EntryForm
+from .models import Entry, Title, Genre, LibraryFolder
+from . import tmdb, library
 
 
 def register(request):
@@ -83,6 +86,9 @@ def tmdb_page(request):
 def tmdb_results(request):
     q = request.GET.get('q', '').strip()
     results = tmdb.search(q) if len(q) >= 2 else []
+    folders = library.user_folders(request.user)
+    for r in results:
+        r['local'] = bool(library.find(folders, r['title'], r['original']))
     return render(request, 'tracker/_tmdb_results.html', {'results': results, 'q': q})
 
 
@@ -121,9 +127,110 @@ def tmdb_add(request, media_type, tmdb_id):
             tmdb_id=tmdb_id,
             tmdb_type=media_type,
         )
+        folders = library.user_folders(request.user)
+        title.original_name = d.get('original_title') or d.get('original_name') or ''
+        title.local_file = library.find(folders, title.name, title.original_name)
+        title.save()
         for g in genre_names:
             genre, _ = Genre.objects.get_or_create(name=g.capitalize())
             title.genres.add(genre)
 
     entry, _ = Entry.objects.get_or_create(user=request.user, title=title)
     return redirect('entry_update', pk=entry.pk)
+
+
+@login_required
+def watch(request, pk):
+    title = get_object_or_404(Title, pk=pk)
+    folders = library.user_folders(request.user)
+    if request.method == 'POST':
+        path = request.POST.get('file', '')
+        if library.safe_path(folders, path):
+            title.local_file = path
+            title.save()
+        return redirect('watch', pk=pk)
+    if not library.safe_path(folders, title.local_file):
+        title.local_file = library.find(folders, title.name, title.original_name)
+        title.save()
+    ctx = {'title': title, 'has_folders': bool(folders),
+           'files': [] if title.local_file else library.scan(folders)}
+    return render(request, 'tracker/watch.html', ctx)
+
+
+@login_required
+def stream(request, pk):
+    title = get_object_or_404(Title, pk=pk)
+    path = library.safe_path(library.user_folders(request.user), title.local_file)
+    if not path:
+        raise Http404
+    size = path.stat().st_size
+    start, end, status = 0, size - 1, 200
+    m = re.match(r'bytes=(\d*)-(\d*)', request.headers.get('Range', ''))
+    if m:
+        if m.group(1):
+            start = int(m.group(1))
+        if m.group(2):
+            end = min(int(m.group(2)), size - 1)
+        status = 206
+    length = end - start + 1
+
+    def chunks():
+        with open(path, 'rb') as f:
+            f.seek(start)
+            left = length
+            while left > 0:
+                data = f.read(min(1024 * 1024, left))
+                if not data:
+                    break
+                left -= len(data)
+                yield data
+
+    resp = StreamingHttpResponse(chunks(), status=status,
+                                 content_type=mimetypes.guess_type(path.name)[0] or 'video/mp4')
+    resp['Accept-Ranges'] = 'bytes'
+    resp['Content-Length'] = str(length)
+    if status == 206:
+        resp['Content-Range'] = f'bytes {start}-{end}/{size}'
+    return resp
+
+
+@login_required
+def library_page(request):
+    error = ''
+    if request.method == 'POST':
+        if request.POST.get('action') == 'remove':
+            LibraryFolder.objects.filter(user=request.user,
+                                         pk=request.POST.get('id')).delete()
+        else:
+            p = Path(request.POST.get('path', '').strip()).expanduser()
+            if p.is_dir():
+                LibraryFolder.objects.get_or_create(user=request.user, path=str(p.resolve()))
+            else:
+                error = 'Такой папки нет. Проверьте путь.'
+        if not error:
+            return redirect('library_page')
+    folders = list(LibraryFolder.objects.filter(user=request.user))
+    count = len(library.scan([f.path for f in folders], force=True))
+    return render(request, 'tracker/library.html',
+                  {'folders': folders, 'count': count, 'error': error})
+
+
+@login_required
+def browse(request):
+    p = Path(request.GET.get('path') or Path.home()).expanduser()
+    try:
+        p = p.resolve()
+    except OSError:
+        p = Path.home()
+    if not p.is_dir():
+        p = Path.home()
+    dirs = []
+    try:
+        dirs = sorted((d for d in p.iterdir()
+                       if d.is_dir() and not d.name.startswith('.')),
+                      key=lambda d: d.name.lower())
+    except PermissionError:
+        pass
+    return render(request, 'tracker/browse.html', {
+        'path': p, 'dirs': dirs,
+        'parent': p.parent if p.parent != p else None})

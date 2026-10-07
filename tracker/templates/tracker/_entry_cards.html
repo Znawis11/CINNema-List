@@ -12,6 +12,7 @@
         {% if e.rating %}<div class="mt-1">⭐ {{ e.rating }}/5</div>{% endif %}
       </div>
       <div class="card-footer d-flex gap-2">
+        <a href="{% url 'watch' e.title.pk %}" class="btn btn-sm btn-primary">▶ Смотреть</a>
         <a href="{% url 'entry_update' e.pk %}" class="btn btn-sm btn-outline-primary">Изменить</a>
         <a href="{% url 'entry_delete' e.pk %}" class="btn btn-sm btn-outline-danger">Удалить</a>
       </div>
