@@ -1,0 +1,29 @@
+{% if title.local_file %}
+  <video controls autoplay class="w-100 bg-black rounded" style="max-height:70vh">
+    <source src="{% url 'stream' title.pk %}">
+    Браузер не поддерживает это видео.
+  </video>
+  <div class="d-flex justify-content-between align-items-center gap-2 mt-2">
+    <span class="text-muted small text-truncate" title="{{ title.local_file }}">Файл: {{ title.local_file }}</span>
+    <button class="btn btn-sm btn-outline-secondary text-nowrap" data-bs-toggle="collapse"
+            data-bs-target="#pickFile">Другой файл</button>
+  </div>
+  <div class="collapse mt-2" id="pickFile">
+    {% include 'tracker/_file_form.html' %}
+  </div>
+  <p class="text-muted small mt-2 mb-0">
+    Если видео не играет, файл, скорее всего, в формате mkv/avi: сконвертируйте в mp4.
+  </p>
+{% else %}
+  {% if not has_folders %}
+    <div class="alert alert-info">
+      Сначала укажите папки с фильмами — файл подберётся автоматически.
+      <div class="mt-2">
+        <a href="{% url 'library_page' %}" class="btn btn-sm btn-primary">Мои папки</a>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-muted">Файл автоматически не найден. Выберите вручную:</p>
+    {% include 'tracker/_file_form.html' %}
+  {% endif %}
+{% endif %}

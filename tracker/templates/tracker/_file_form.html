@@ -1,0 +1,8 @@
+<form method="post" action="{% url 'entry_detail' entry.pk %}?tab=player" class="d-flex gap-2">
+  {% csrf_token %}
+  <select name="file" class="form-select form-select-sm">
+    {% for f in files %}<option value="{{ f }}">{{ f }}</option>
+    {% empty %}<option disabled>В указанных папках нет видео</option>{% endfor %}
+  </select>
+  <button class="btn btn-sm btn-primary text-nowrap">Привязать файл</button>
+</form>
