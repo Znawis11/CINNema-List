@@ -15,7 +15,7 @@ def _get(path, **params):
     key = (path, tuple(sorted(params.items())))
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < TTL:
-        _offline = False   # ответ уже лежит в кэше — сеть не нужна
+        _offline = hit[2]   # статус сети сохраняется вместе с ответом
         return hit[1]
 
     params['api_key'] = settings.TMDB_API_KEY
@@ -28,7 +28,7 @@ def _get(path, **params):
     except (requests.RequestException, ValueError):
         data = {}
         _offline = True
-    _cache[key] = (time.time(), data)
+    _cache[key] = (time.time(), data, _offline)
     return data
 
 
