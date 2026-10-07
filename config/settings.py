@@ -130,4 +130,4 @@ MAILERS = {
     },
 }
 
-OMDB_API_KEY = 'http://www.omdbapi.com/?i=tt3896198&apikey=3e50afc3'
+TMDB_API_KEY = '637aba21ba668f38b983e72673e462ec'

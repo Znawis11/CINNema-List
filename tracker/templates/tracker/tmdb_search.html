@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Поиск фильмов и сериалов</h2>
+<input name="q" class="form-control mb-4" autofocus
+       placeholder="Например: Интерстеллар"
+       hx-get="{% url 'tmdb_results' %}"
+       hx-trigger="keyup changed delay:500ms"
+       hx-target="#tmdb-results">
+<div id="tmdb-results"></div>
+{% endblock %}

@@ -1,0 +1,24 @@
+<div class="row">
+{% for r in results %}
+  <div class="col-md-3 mb-3">
+    <div class="card h-100">
+      {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top">{% endif %}
+      <div class="card-body">
+        <h5>{{ r.title }}</h5>
+        <div class="text-muted small">
+          {{ r.year }} · {% if r.media_type == 'tv' %}сериал{% else %}фильм{% endif %}
+          {% if r.rating %}· ⭐ {{ r.rating }}{% endif %}
+        </div>
+      </div>
+      <div class="card-footer">
+        <form method="post" action="{% url 'tmdb_add' r.media_type r.id %}">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-success">Добавить в коллекцию</button>
+        </form>
+      </div>
+    </div>
+  </div>
+{% empty %}
+  {% if q %}<p>Ничего не найдено.</p>{% endif %}
+{% endfor %}
+</div>
