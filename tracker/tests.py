@@ -11,7 +11,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Collection, Entry, Episode, Title, WatchSession
+from .models import Collection, Entry, Episode, Genre, Title, WatchSession
 from . import tmdb
 
 
@@ -372,7 +372,7 @@ class WatchTimeTest(TestCase):
 
     def test_watched_time_lands_in_current_month(self):
         """Время попадает в месяц просмотра, а не в месяц добавления."""
-        old = Entry.objects.create(
+        Entry.objects.create(
             user=self.user,
             title=Title.objects.create(name='Давно добавленный', duration_min=100),
             status='watched', watched_at=self.today.replace(day=1))
@@ -380,7 +380,43 @@ class WatchTimeTest(TestCase):
         # и в графике по месяцам это тоже видно
         hours = self.client.get(reverse('profile')).context['hours']
         self.assertEqual(hours['values'][-1], 1.7)
-        del old
+
+    def test_genres_split_time_between_genres(self):
+        """Один фильм с двумя жанрами даёт время в обоих жанрах."""
+        title, _ = self._add('Двухжанровый', 120)
+        title.genres.add(Genre.objects.create(name='Боевик'),
+                         Genre.objects.create(name='Фантастика'))
+        genres = self.client.get(reverse('profile')).context['genres']
+        self.assertEqual(genres['unit'], 'ч')
+        self.assertEqual(dict(zip(genres['labels'], genres['values'])),
+                         {'Боевик': 2.0, 'Фантастика': 2.0})
+
+    def test_home_shows_same_genres_as_profile(self):
+        """На главной показан тот же график жанров, что и в профиле."""
+        title, _ = self._add('Один жанр', 60)
+        title.genres.add(Genre.objects.create(name='Комедия'))
+        profile_genres = self.client.get(reverse('profile')).context['genres']
+        home = self.client.get(reverse('home'))
+        self.assertEqual(home.status_code, 200)
+        self.assertEqual(home.context['genres'], profile_genres)
+        self.assertContains(home, 'Мои предпочтения по жанрам')
+        self.assertContains(home, 'Комедия')
+
+    def test_home_without_watched_falls_back_to_counts(self):
+        """Когда длительность неизвестна, жанры считаются в штуках."""
+        title = Title.objects.create(name='Без длительности', duration_min=0)
+        title.genres.add(Genre.objects.create(name='Детектив'))
+        Entry.objects.create(user=self.user, title=title, status='watched',
+                             watched_at=self.today)
+        genres = self.client.get(reverse('home')).context['genres']
+        self.assertEqual(genres['unit'], 'шт')
+        self.assertEqual(genres['values'], [1])
+
+    def test_home_hides_genres_block_for_empty_collection(self):
+        """При пустой коллекции блок жанров не показывается."""
+        home = self.client.get(reverse('home'))
+        self.assertEqual(home.context['genres']['labels'], [])
+        self.assertNotContains(home, 'Мои предпочтения по жанрам')
 
 
 class SettingsTest(TestCase):

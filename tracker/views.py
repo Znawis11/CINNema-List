@@ -100,6 +100,12 @@ def home(request):
     stats = Entry.objects.filter(user=request.user).aggregate(
         total=Count('id'), watched=Count('id', filter=Q(status='watched')))
 
+    # предпочтения по жанрам — тот же подсчёт, что в профиле;
+    # показывать имеет смысл, только если в коллекции есть хоть что-то
+    genres = ({'labels': [], 'values': [], 'unit': 'ч'} if not stats['total']
+              else _genre_chart(request.user,
+                                _watch_stats(request.user)['genre_hours']))
+
     return render(request, 'tracker/home.html', {
         'q': request.GET.get('q', '').strip(),
         'popular': imdbapi.popular(18),
@@ -109,6 +115,7 @@ def home(request):
                                          .annotate(n=Count('entries'))
                                          .order_by('name')[:8],
         'has_search': True,
+        'genres': genres,
     })
 
 
@@ -1158,21 +1165,19 @@ def _last_weeks(n):
             for i in range(n - 1, -1, -1)]
 
 
-@login_required
-def profile(request):
-    """Профиль: статистика просмотров (часы, графики) и список статусов."""
-    user = request.user
+def _watch_stats(user):
+    """Время просмотра пользователя, разложенное по месяцам, жанрам и типам.
+
+    Счётчик складывается из двух источников:
+      1) длина каждого фильма, отмеченного «Просмотрено» — она просто
+         прибавляется к общему времени (так учитываются фильмы, которые
+         смотрелись на стриминге или в стороннем плеере);
+      2) реальное воспроизведение в нашем плеере (сеансы) — но только по
+         фильмам, которые ещё не отмечены просмотренными, иначе один и тот
+         же фильм посчитался бы дважды.
+    """
     sessions = (WatchSession.objects.filter(user=user)
                 .select_related('title').prefetch_related('title__genres'))
-
-    # --- часы: по месяцам, по жанрам, по типам -----------------------------
-    # Счётчик складывается из двух источников:
-    #   1) длина каждого фильма, отмеченного «Просмотрено» — она просто
-    #      прибавляется к общему времени (так учитываются фильмы, которые
-    #      смотрелись на стриминге или в стороннем плеере);
-    #   2) реальное воспроизведение в нашем плеере (сеансы) — но только по
-    #      фильмам, которые ещё не отмечены просмотренными, иначе один и тот
-    #      же фильм посчитался бы дважды.
     watched_entries = list(
         Entry.objects.filter(user=user, status='watched')
         .select_related('title').prefetch_related('title__genres', 'episodes'))
@@ -1205,24 +1210,49 @@ def profile(request):
         when = e.watched_at or timezone.localtime(e.added_at)
         add_time(mins * 60, when, e.title, [g.name for g in e.title.genres.all()])
 
+    return {'total_sec': total_sec, 'per_month': per_month,
+            'genre_hours': genre_hours, 'type_hours': type_hours,
+            'watched_entries': watched_entries}
+
+
+def _genre_chart(user, genre_hours):
+    """Данные графика «предпочтения по жанрам» (то же, что в профиле).
+
+    Если времени ещё нет, показываем количество просмотренных фильмов — так
+    график остаётся полезным с первого дня.
+    """
+    if not genre_hours:
+        counts = {}
+        for e in Entry.objects.filter(user=user, status='watched').select_related(
+                'title').prefetch_related('title__genres'):
+            for g in e.title.genres.all():
+                counts[g.name] = counts.get(g.name, 0) + 1
+        items = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
+        return {'labels': [k for k, _ in items],
+                'values': [v for _, v in items], 'unit': 'шт'}
+
+    items = sorted(genre_hours.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    return {'labels': [k for k, _ in items],
+            'values': [round(v / 3600, 1) for _, v in items], 'unit': 'ч'}
+
+
+@login_required
+def profile(request):
+    """Профиль: статистика просмотров (часы, графики) и список статусов."""
+    user = request.user
+    st = _watch_stats(user)
+    total_sec, per_month = st['total_sec'], st['per_month']
+    genre_hours, type_hours = st['genre_hours'], st['type_hours']
+
+    # --- часы: по месяцам, по жанрам, по типам -----------------------------
     months = _last_months(8)
     hours_values = [round(per_month.get(k, 0) / 3600, 1) for k in months]
     hours_labels = [f'{MONTHS_SHORT[m - 1]} {str(y)[2:]}' for y, m in months]
     hours_now = hours_values[-1]
     hours_avg = round(sum(hours_values) / len(hours_values), 1)
 
-    # если плеером ещё не пользовались — показываем предпочтения по оценённому
-    genre_unit = 'ч'
-    if not genre_hours:
-        genre_unit = 'шт'
-        for e in Entry.objects.filter(user=user, status='watched').select_related(
-                'title').prefetch_related('title__genres'):
-            for g in e.title.genres.all():
-                genre_hours[g.name] = genre_hours.get(g.name, 0) + 1
-    genre_items = sorted(genre_hours.items(), key=lambda kv: kv[1], reverse=True)[:10]
-    genre_labels = [k for k, _ in genre_items]
-    genre_values = [round(v / 3600, 1) if genre_unit == 'ч' else v
-                    for _, v in genre_items]
+    genres = _genre_chart(user, genre_hours)
+    genre_unit = genres['unit']
 
     if not type_hours:  # запасной вариант — просто количество записей
         for e in Entry.objects.filter(user=user).select_related('title'):
@@ -1270,8 +1300,7 @@ def profile(request):
         },
         'unfinished': unfinished,
         'hours': {'labels': hours_labels, 'values': hours_values},
-        'genres': {'labels': genre_labels, 'values': genre_values,
-                   'unit': genre_unit},
+        'genres': genres,
         'types': {'labels': type_labels, 'values': type_values,
                   'unit': type_unit},
         'weeks': {'labels': week_labels, 'values': week_values},
