@@ -634,10 +634,11 @@ class HomeSearchTest(TestCase):
         page = self.client.get(f'{reverse("home")}?q=Нолан')
         self.assertContains(page, 'value="Нолан"')
 
-    def test_hint_points_to_collection_search(self):
-        """Подсказка зовёт искать по коллекции на её страницу."""
+    def test_no_explanatory_hint_under_search(self):
+        """Под полем поиска нет поясняющих текстов."""
         page = self.client.get(reverse('home'))
-        self.assertContains(page, reverse('entry_list'))
+        self.assertNotContains(page, 'Поиск идёт по базе TMDB')
+        self.assertNotContains(page, 'Искать по своей коллекции')
 
 
 class SettingsTest(TestCase):
