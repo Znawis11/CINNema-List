@@ -4,6 +4,7 @@
 Сетевой тест (страница фильма из TMDB) автоматически пропускается без интернета.
 """
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 
 from django.contrib.auth.models import User
@@ -255,10 +256,11 @@ class PlayerTest(TestCase):
             video.write_bytes(b'\x00')
             self.client.post(reverse('entry_detail', args=[self.entry.pk]),
                              {'file': str(video)})
-        page = self.client.get(
-            reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
-        self.assertEqual(page.status_code, 200)
-        self.assertNotContains(page, 'autoplay')
+            page = self.client.get(
+                reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
+            self.assertEqual(page.status_code, 200)
+            self.assertContains(page, '<video', html=False)  # видео выводится
+            self.assertNotContains(page, 'autoplay')
 
     def test_file_dialog_accepts_mkv_avi(self):
         page = self.client.get(
@@ -288,6 +290,103 @@ class PlayerTest(TestCase):
             reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
         self.assertContains(page, 'id="streamingUrlField"')
         self.assertNotContains(page, 'id="streamingUrlField"\n               style="display:none"')
+
+
+class AutoWatchedTest(TestCase):
+    """По окончании воспроизведения фильм получает метку «Просмотрено»."""
+
+    def setUp(self):
+        self.user = _register(self.client, 'autofin')
+        self.today = timezone.localdate()
+        self.title = Title.objects.create(name='Фильм', duration_min=100)
+        self.entry = Entry.objects.create(user=self.user, title=self.title,
+                                          status='planned')
+
+    def test_end_of_video_marks_film_watched(self):
+        """Плеер отмечает фильм просмотренным и ставит дату."""
+        response = self.client.post(reverse('entry_watched',
+                                            args=[self.entry.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.status, 'watched')
+        self.assertEqual(self.entry.watched_at, self.today)
+
+    def test_watched_film_length_goes_to_counter(self):
+        """Отметка из плеера сразу добавляет длительность в счётчик."""
+        self.client.post(reverse('entry_watched', args=[self.entry.pk]))
+        stats = self.client.get(reverse('profile')).context['stats']
+        self.assertEqual(stats['hours_total'], 1.7)
+
+    def test_keeps_earlier_watched_date(self):
+        """Если дата просмотра уже задана вручную — не перетираем её."""
+        self.entry.status = 'watched'
+        self.entry.watched_at = self.today - timedelta(days=10)
+        self.entry.save()
+        self.client.post(reverse('entry_watched', args=[self.entry.pk]))
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.watched_at, self.today - timedelta(days=10))
+
+    def test_only_owner_can_mark(self):
+        """Чужой фильм отметить нельзя (клиент остаётся за autofin)."""
+        stranger = User.objects.create_user('stranger1', password='x12345678')
+        other = Entry.objects.create(user=stranger, title=self.title)
+        response = self.client.post(reverse('entry_watched', args=[other.pk]))
+        self.assertEqual(response.status_code, 404)
+        other.refresh_from_db()
+        self.assertEqual(other.status, 'planned')
+
+    def test_player_has_autowatched_url(self):
+        """В плеере есть адрес авто-отметки для фильма."""
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / 'movie.mp4'
+            video.write_bytes(b'\x00')
+            self.client.post(reverse('entry_detail', args=[self.entry.pk]),
+                             {'file': str(video)})
+            page = self.client.get(
+                reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
+            self.assertContains(page, '<video', html=False)
+            self.assertContains(page,
+                                reverse('entry_watched', args=[self.entry.pk]))
+            self.assertContains(page, 'Фильм отмечен просмотренным')
+
+    def test_episode_gets_date_even_if_file_bound_before(self):
+        """Серия с привязанным файлом тоже отмечается просмотренной."""
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / 's01e01.mp4'
+            video.write_bytes(b'\x00')
+            self.client.post(reverse('entry_detail', args=[self.entry.pk]),
+                             {'file': str(video), 'season': '1', 'number': '1'})
+        ep = Episode.objects.get(entry=self.entry, season=1, number=1)
+        self.assertIsNone(ep.watched_at)  # файл привязан, но не просмотрено
+
+        self.client.post(reverse('entry_episodes', args=[self.entry.pk]),
+                         {'action': 'watch', 'season': '1', 'number': '1'})
+        ep.refresh_from_db()
+        self.assertEqual(ep.watched_at, self.today)
+
+    def test_series_not_closed_when_only_files_bound(self):
+        """Файл у всех серий привязан, но серии не смотрелись — сериал открыт."""
+        self.title.type = 'series'
+        self.title.total_episodes = 2
+        self.title.save()
+        with tempfile.TemporaryDirectory() as tmp:
+            for number in (1, 2):
+                video = Path(tmp) / f's01e0{number}.mp4'
+                video.write_bytes(b'\x00')
+                self.client.post(reverse('entry_detail', args=[self.entry.pk]),
+                                 {'file': str(video), 'season': '1',
+                                  'number': str(number)})
+        self.assertEqual(Episode.objects.filter(entry=self.entry).count(), 2)
+        self.entry.refresh_from_db()
+        self.assertNotEqual(self.entry.status, 'watched')
+
+        # досмотрели обе серии — сериал закрывается
+        for number in (1, 2):
+            self.client.post(reverse('entry_episodes', args=[self.entry.pk]),
+                             {'action': 'watch', 'season': '1',
+                              'number': str(number)})
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.status, 'watched')
 
 
 class WatchTimeTest(TestCase):

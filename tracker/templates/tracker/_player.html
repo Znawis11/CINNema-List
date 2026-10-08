@@ -103,19 +103,42 @@
           toastTimer = setTimeout(() => toast.remove(), 3500);
         };
         let marked = false;
+        // по окончании видео фильм (или его серия) получает метку
+        // «Просмотрено» — срок фильма попадает в общий счётчик времени
         const markWatched = () => {
-          if (!video.dataset.ep || marked) return;
+          if (marked) return;
           marked = true;
           const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
-          fetch("{% url 'entry_episodes' entry.pk %}", {
+          const isEpisode = !!video.dataset.ep;
+          const url = isEpisode
+            ? "{% url 'entry_episodes' entry.pk %}"
+            : "{% url 'entry_watched' entry.pk %}";
+          const body = isEpisode
+            ? { action: 'watch', season: video.dataset.season,
+                number: video.dataset.number }
+            : {};
+          fetch(url, {
             method: 'POST',
             headers: { 'X-CSRFToken': csrf, 'X-Fetch': '1' },
-            body: new URLSearchParams({
-              action: 'watch',
-              season: video.dataset.season,
-              number: video.dataset.number,
-            }),
-          }).then(r => { if (r.ok) say('Серия ' + video.dataset.number + ' отмечена просмотренной'); });
+            body: new URLSearchParams(body),
+          }).then(r => {
+            if (!r.ok) return;
+            if (isEpisode) {
+              say('Серия ' + video.dataset.number + ' отмечена просмотренной');
+              return;
+            }
+            say('Фильм отмечен просмотренным');
+            // обновляем метку в шапке карточки, чтобы статус был виден сразу
+            const badge = document.getElementById('entryStatusBadge');
+            if (badge) {
+              badge.textContent = 'Просмотрено';
+              badge.className = 'badge bg-success';
+            }
+            const date = document.getElementById('entryWatchedAt');
+            if (date && !date.textContent.trim()) {
+              date.textContent = 'Просмотрено: сегодня';
+            }
+          });
         };
         video.addEventListener('ended', markWatched);
         video.addEventListener('timeupdate', () => {

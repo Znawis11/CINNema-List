@@ -12,7 +12,7 @@
       <a href="{% url 'entry_update' entry.pk %}" class="btn btn-sm btn-outline-primary flex-fill">✏️ Изменить</a>
       <a href="{% url 'entry_delete' entry.pk %}" class="btn btn-sm btn-outline-danger" title="Удалить из коллекции">🗑️</a>
     </div>
-    <div class="small text-muted mt-2">
+    <div class="small text-muted mt-2" id="entryWatchedAt">
       Добавлено: {{ entry.added_at|date:"d.m.Y" }}
       {% if entry.watched_at %}<br>Просмотрено: {{ entry.watched_at|date:"d.m.Y" }}{% endif %}
     </div>
@@ -21,7 +21,7 @@
   <div class="col-md-9">
     <div class="d-flex align-items-center gap-2 flex-wrap">
       <h2 class="mb-0">{{ title.name }}</h2>
-      <span class="badge {% if entry.status == 'watched' %}bg-success{% elif entry.status == 'watching' %}bg-info{% else %}bg-secondary{% endif %}">
+      <span id="entryStatusBadge" class="badge {% if entry.status == 'watched' %}bg-success{% elif entry.status == 'watching' %}bg-info{% else %}bg-secondary{% endif %}">
         {{ entry.get_status_display }}
       </span>
       {% if entry.rating %}<span class="badge bg-warning">⭐ {{ entry.rating }}/5</span>{% endif %}

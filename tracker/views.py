@@ -610,6 +610,23 @@ def episode_stream(request, pk):
 
 @login_required
 @require_POST
+def entry_watched(request, pk):
+    """Отметка фильма просмотренным — вызывается плеером в конце видео.
+
+    Длительность фильма сразу попадает в общий счётчик времени (см.
+    _watch_stats), поэтому важно проставить и статус, и дату просмотра.
+    """
+    entry = get_object_or_404(Entry, pk=pk, user=request.user)
+    if entry.status != 'watched':
+        entry.status = 'watched'
+        entry.watched_at = entry.watched_at or timezone.localdate()
+        entry.save(update_fields=['status', 'watched_at'])
+    return JsonResponse({'ok': True, 'status': entry.get_status_display(),
+                         'watched_at': entry.watched_at})
+
+
+@login_required
+@require_POST
 def entry_episodes(request, pk):
     """Отметка просмотренных серий (вкладка «Серии» карточки сериала)."""
     entry = get_object_or_404(Entry, pk=pk, user=request.user)
@@ -624,16 +641,22 @@ def entry_episodes(request, pk):
     if request.POST.get('action') == 'unwatch':
         Episode.objects.filter(entry=entry, season=season, number=number).delete()
     else:
-        _, created = Episode.objects.get_or_create(
+        # серия могла появиться раньше — при привязке файла или ссылки;
+        # отметка просмотренной всё равно должна проставить дату
+        ep, _ = Episode.objects.get_or_create(
             entry=entry, season=season, number=number,
             defaults={'watched_at': timezone.localdate()})
-        if created and entry.status == 'planned':
-            entry.status = 'watching'
-            entry.save(update_fields=['status'])
+        if not ep.watched_at:
+            ep.watched_at = timezone.localdate()
+            ep.save(update_fields=['watched_at'])
+            if entry.status == 'planned':
+                entry.status = 'watching'
+                entry.save(update_fields=['status'])
 
-    # все серии просмотрены — закрываем сериал
+    # все серии просмотрены — закрываем сериал (считаем именно просмотренные,
+    # а не все, у которых просто привязан файл)
     if entry.title.total_episodes:
-        watched_count = entry.episodes.count()
+        watched_count = entry.episodes.filter(watched_at__isnull=False).count()
         if watched_count >= entry.title.total_episodes and entry.status != 'watched':
             entry.status = 'watched'
             entry.watched_at = timezone.localdate()

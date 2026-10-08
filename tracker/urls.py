@@ -18,6 +18,7 @@ urlpatterns = [
     path('entry/<int:pk>/tags/', views.entry_tags, name='entry_tags'),  # статус/оценка/теги
     path('entry/<int:pk>/location/', views.entry_location, name='entry_location'),  # файл/стриминг
     path('entry/<int:pk>/episodes/', views.entry_episodes, name='entry_episodes'),   # отметка серий
+    path('entry/<int:pk>/watched/', views.entry_watched, name='entry_watched'),      # авто-отметка из плеера
     path('entry/<int:pk>/episode-stream/', views.episode_stream, name='episode_stream'),  # ссылка серии
 
     # --- отдельная страница фильма (вне коллекции): описание + кнопка «Добавить»
