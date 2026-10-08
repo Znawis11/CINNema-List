@@ -9,8 +9,9 @@ from pathlib import Path
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from .models import Collection, Entry, Episode, Title
+from .models import Collection, Entry, Episode, Title, WatchSession
 from . import tmdb
 
 
@@ -286,6 +287,100 @@ class PlayerTest(TestCase):
             reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
         self.assertContains(page, 'id="streamingUrlField"')
         self.assertNotContains(page, 'id="streamingUrlField"\n               style="display:none"')
+
+
+class WatchTimeTest(TestCase):
+    """Общий счётчик времени: длительность просмотренных фильмов."""
+
+    def setUp(self):
+        self.user = _register(self.client, 'timewatcher')
+        self.today = timezone.localdate()
+
+    def _stats(self):
+        return self.client.get(reverse('profile')).context['stats']
+
+    def _add(self, name, minutes, status='watched', **kw):
+        title = Title.objects.create(name=name, duration_min=minutes, **kw)
+        entry = Entry.objects.create(
+            user=self.user, title=title, status=status,
+            watched_at=self.today if status == 'watched' else None)
+        return title, entry
+
+    def test_watched_film_adds_its_length(self):
+        """Длина просмотренного фильма просто добавляется к счётчику."""
+        self._add('Двухчасовой', 120)
+        self.assertEqual(self._stats()['hours_total'], 2.0)
+
+    def test_unwatched_film_adds_nothing(self):
+        """Фильм «в планах» времени не добавляет."""
+        self._add('В планах', 120, status='planned')
+        self.assertEqual(self._stats()['hours_total'], 0.0)
+
+    def test_several_films_are_summed(self):
+        self._add('Первый', 90)
+        self._add('Второй', 45)
+        self._add('Третий', 30)
+        # 165 мин = 2.75 ч (счётчик округляется до десятых)
+        self.assertAlmostEqual(self._stats()['hours_total'], 2.75, places=1)
+
+    def test_player_session_does_not_double_count(self):
+        """Просмотренный фильм не считается дважды: сессия + его длина."""
+        title, _ = self._add('И с плеером', 120)
+        WatchSession.objects.create(user=self.user, title=title,
+                                    last_ping=timezone.now(), seconds=3600)
+        self.assertEqual(self._stats()['hours_total'], 2.0)
+
+    def test_player_session_counts_for_unwatched_film(self):
+        """Реальное время в плеере по фильму «в процессе» учитывается."""
+        title, _ = self._add('В процессе', 120, status='watching')
+        WatchSession.objects.create(user=self.user, title=title,
+                                    last_ping=timezone.now(), seconds=3600)
+        self.assertEqual(self._stats()['hours_total'], 1.0)
+
+    def test_series_counts_every_watched_episode(self):
+        """Сериал: длина серии, умноженная на число просмотренных серий."""
+        title, entry = self._add('Сериал', 45, status='watched', type='series')
+        for number in (1, 2, 3):
+            Episode.objects.create(entry=entry, season=1, number=number,
+                                   watched_at=self.today)
+        # 3 серии по 45 мин = 135 мин = 2.25 ч
+        self.assertAlmostEqual(self._stats()['hours_total'], 2.25, places=1)
+
+    def test_watched_whole_series_uses_total_episodes(self):
+        """Сериал без отметок серий, но помеченный просмотренным целиком."""
+        self._add('Сериал всего', 60, status='watched', type='series',
+                  total_episodes=10)
+        self.assertEqual(self._stats()['hours_total'], 10.0)
+
+    def test_marking_watched_sets_date_automatically(self):
+        """Отметка «Просмотрено» сама ставит дату — для месяца в статистике."""
+        _, entry = self._add('Без даты', 100, status='planned')
+        self.client.post(reverse('entry_tags', args=[entry.pk]),
+                         {'action': 'status', 'status': 'watched'})
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, 'watched')
+        self.assertEqual(entry.watched_at, self.today)
+
+    def test_unmarking_clears_date(self):
+        """Снятие отметки «Просмотрено» убирает и дату."""
+        _, entry = self._add('Сниму отметку', 100)
+        self.client.post(reverse('entry_tags', args=[entry.pk]),
+                         {'action': 'status', 'status': 'watching'})
+        entry.refresh_from_db()
+        self.assertIsNone(entry.watched_at)
+        self.assertEqual(self._stats()['hours_total'], 0.0)
+
+    def test_watched_time_lands_in_current_month(self):
+        """Время попадает в месяц просмотра, а не в месяц добавления."""
+        old = Entry.objects.create(
+            user=self.user,
+            title=Title.objects.create(name='Давно добавленный', duration_min=100),
+            status='watched', watched_at=self.today.replace(day=1))
+        self.assertEqual(self._stats()['hours_total'], 1.7)
+        # и в графике по месяцам это тоже видно
+        hours = self.client.get(reverse('profile')).context['hours']
+        self.assertEqual(hours['values'][-1], 1.7)
+        del old
 
 
 class SettingsTest(TestCase):

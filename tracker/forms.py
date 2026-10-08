@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 from .models import Entry, Title, Tag, Genre
 
 
@@ -64,6 +65,10 @@ class EntryForm(forms.ModelForm):
 
         entry.title = title
         entry.user = self.user
+        # отметили «Просмотрено» — длительность фильма пойдёт в счётчик
+        # времени, а ему нужен месяц просмотра, поэтому дату ставим сами
+        if entry.status == 'watched' and not entry.watched_at:
+            entry.watched_at = timezone.localdate()
         entry.save()
         self.save_m2m()
 

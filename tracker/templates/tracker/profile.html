@@ -65,10 +65,10 @@
       <div class="card-body">
         <h6 class="mb-3">Часы просмотра по месяцам <span class="text-muted fs-6 fw-normal">· всего {{ stats.hours_total }} ч</span></h6>
         <canvas id="hoursChart" height="220"></canvas>
-        {% if not has_sessions %}
+        {% if not has_watch_time %}
           <p class="small text-muted mt-2 mb-0">
-            Часы считаются по реальному воспроизведению в плеере — откройте
-            вкладку «Видеоплеер» у фильма и запустите видео.
+            Общее время складывается из длительности фильмов, отмеченных
+            «Просмотрено», и реального воспроизведения в плеере.
           </p>
         {% endif %}
       </div>

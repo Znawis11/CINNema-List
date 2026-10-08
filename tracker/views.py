@@ -70,6 +70,24 @@ def _with_scores(entries):
     return entries
 
 
+def _watched_minutes(entry):
+    """Минуты, которые просмотренный фильм добавляет в общий счётчик времени.
+
+    Фильм или док — просто его длительность. Сериал — длина серии
+    (у сериала в duration_min хранится именно она), помноженная на число
+    отмеченных просмотренных серий; если серии не отмечены, а фильм помечен
+    просмотренным целиком, берём число всех серий из TMDB.
+    """
+    t = entry.title
+    if t.type != 'series':
+        return t.duration_min or 0
+    n = sum(1 for ep in entry.episodes.all() if ep.watched_at)
+    if not n and not entry.watched_at:
+        return 0
+    n = n or t.total_episodes or 1
+    return n * (t.duration_min or 0)
+
+
 @login_required
 def home(request):
     """Главная: поиск фильмов, популярное сейчас и последние добавления."""
@@ -474,7 +492,11 @@ def entry_tags(request, pk):
             value = request.POST.get('status')
             if value in dict(Entry.STATUSES):
                 entry.status = value
-                entry.save(update_fields=['status'])
+                # дата просмотра нужна статистике (в какой месяц попадёт
+                # длительность фильма), поэтому ставим её автоматически
+                entry.watched_at = (timezone.localdate() if value == 'watched'
+                                    else None)
+                entry.save(update_fields=['status', 'watched_at'])
         elif action == 'rating':
             try:
                 value = int(request.POST.get('rating') or 0)
@@ -1144,15 +1166,44 @@ def profile(request):
                 .select_related('title').prefetch_related('title__genres'))
 
     # --- часы: по месяцам, по жанрам, по типам -----------------------------
+    # Счётчик складывается из двух источников:
+    #   1) длина каждого фильма, отмеченного «Просмотрено» — она просто
+    #      прибавляется к общему времени (так учитываются фильмы, которые
+    #      смотрелись на стриминге или в стороннем плеере);
+    #   2) реальное воспроизведение в нашем плеере (сеансы) — но только по
+    #      фильмам, которые ещё не отмечены просмотренными, иначе один и тот
+    #      же фильм посчитался бы дважды.
+    watched_entries = list(
+        Entry.objects.filter(user=user, status='watched')
+        .select_related('title').prefetch_related('title__genres', 'episodes'))
+    watched_titles = {e.title_id for e in watched_entries}
+
     per_month, genre_hours, type_hours = {}, {}, {}
     total_sec = 0
+
+    def add_time(sec, when, title, genres):
+        """Прибавляет секунды к общему счётчику и во все разрезы статистики."""
+        nonlocal total_sec
+        total_sec += sec
+        if when is not None:
+            key = (when.year, when.month)
+            per_month[key] = per_month.get(key, 0) + sec
+        for g in genres:
+            genre_hours[g] = genre_hours.get(g, 0) + sec
+        type_hours[title.type] = type_hours.get(title.type, 0) + sec
+
     for s in sessions:
-        total_sec += s.seconds
+        if s.title_id in watched_titles:
+            continue
         d = timezone.localtime(s.last_ping)
-        per_month[(d.year, d.month)] = per_month.get((d.year, d.month), 0) + s.seconds
-        for g in s.title.genres.all():
-            genre_hours[g.name] = genre_hours.get(g.name, 0) + s.seconds
-        type_hours[s.title.type] = type_hours.get(s.title.type, 0) + s.seconds
+        add_time(s.seconds, d, s.title, [g.name for g in s.title.genres.all()])
+
+    for e in watched_entries:
+        mins = _watched_minutes(e)
+        if not mins:
+            continue
+        when = e.watched_at or timezone.localtime(e.added_at)
+        add_time(mins * 60, when, e.title, [g.name for g in e.title.genres.all()])
 
     months = _last_months(8)
     hours_values = [round(per_month.get(k, 0) / 3600, 1) for k in months]
@@ -1224,6 +1275,6 @@ def profile(request):
         'types': {'labels': type_labels, 'values': type_values,
                   'unit': type_unit},
         'weeks': {'labels': week_labels, 'values': week_values},
-        'has_sessions': total_sec > 0,
+        'has_watch_time': total_sec > 0,
     }
     return render(request, 'tracker/profile.html', ctx)
