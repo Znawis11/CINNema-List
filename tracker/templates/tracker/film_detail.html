@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load tracker_extras %}
 {% block content %}
 
 <div class="mb-3">
@@ -9,7 +10,8 @@
   
   <div class="col-md-3 mb-3">
     {% if title.poster_url %}
-      <img src="{{ title.poster_url }}" class="poster shadow-sm" alt="{{ title.name }}">
+      <img src="{{ title.poster_url|poster:'w500' }}" class="poster shadow-sm"
+           alt="{{ title.name }}" decoding="async" fetchpriority="high">
     {% else %}
       <div class="poster-ph">Нет постера</div>
     {% endif %}

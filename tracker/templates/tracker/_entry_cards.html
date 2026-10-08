@@ -1,15 +1,18 @@
+{% load tracker_extras %}
 <div class="row">
 {% for e in entries %}
   <div class="col-6 col-md-4 col-xl-2 mb-3">
     <div class="card h-100 hover-card position-relative">
-      <a href="{% url 'entry_detail' e.pk %}" class="text-decoration-none text-dark">
+      <a href="{% url 'entry_detail' e.pk %}" class="text-decoration-none poster-card">
         {% if e.title.poster_url %}
-          <img src="{{ e.title.poster_url }}" class="poster rounded-bottom-0" alt="{{ e.title.name }}" loading="lazy">
+          <img src="{{ e.title.poster_url|poster:'w342' }}" class="poster rounded-bottom-0"
+               alt="{{ e.title.name }}" loading="lazy" decoding="async"
+               width="342" height="513">
         {% else %}
           <div class="poster-ph rounded-bottom-0">Нет постера</div>
         {% endif %}
         <div class="card-body p-2">
-          <div class="fw-semibold text-truncate" title="{{ e.title.name }}">{{ e.title.name }}</div>
+          <div class="fw-semibold text-truncate poster-name" title="{{ e.title.name }}">{{ e.title.name }}</div>
           <div class="small text-muted mb-1">
             {% if e.title.year %}{{ e.title.year }} · {% endif %}{{ e.title.director|truncatechars:25 }}
           </div>

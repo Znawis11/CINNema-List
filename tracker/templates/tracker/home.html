@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load tracker_extras %}
 {% block content %}
 
 <section class="mb-4">
@@ -35,7 +36,8 @@
        href="{% if p.id %}{% url 'film_by_imdb' p.id %}?q={{ p.title|urlencode }}{% else %}{% url 'home' %}?q={{ p.title|urlencode }}{% endif %}"
        title="Открыть «{{ p.title }}»">
       {% if p.poster %}
-        <img src="{{ p.poster }}" class="poster" alt="{{ p.title }}" loading="lazy">
+        <img src="{{ p.poster|poster:'w342' }}" class="poster" alt="{{ p.title }}"
+             loading="lazy" decoding="async" width="342" height="513">
       {% else %}
         <div class="poster-ph">Нет постера</div>
       {% endif %}

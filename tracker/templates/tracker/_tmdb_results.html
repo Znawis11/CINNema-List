@@ -1,10 +1,13 @@
+{% load tracker_extras %}
 <div class="row">
 {% for r in results %}
   <div class="col-md-3 mb-3">
     <div class="card h-100">
       
-      <a href="{% url 'film_detail' r.media_type r.id %}" class="text-decoration-none text-dark">
-        {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top poster" alt="{{ r.title }}">{% endif %}
+      <a href="{% url 'film_detail' r.media_type r.id %}" class="text-decoration-none poster-card">
+        {% if r.poster %}<img src="{{ r.poster|poster:'w342' }}" class="card-img-top poster"
+             alt="{{ r.title }}" loading="lazy" decoding="async"
+             width="342" height="513">{% endif %}
         <div class="card-body">
           <h5>{{ r.title }}</h5>
           <div class="text-muted small">

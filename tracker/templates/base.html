@@ -45,6 +45,13 @@
     .poster { aspect-ratio: 2 / 3; object-fit: cover; width: 100%; background: var(--card2); border-radius: .75rem .75rem 0 0; }
     .poster-ph { aspect-ratio: 2 / 3; width: 100%; background: var(--card2); border-radius: .75rem .75rem 0 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: .8rem; }
 
+    /* карточка фильма: раньше ссылка была text-dark и название почти не читалось
+       на тёмном фоне — теперь цвет берётся из темы */
+    .poster-card, .poster-card:hover { color: var(--text); }
+    .poster-card:hover .poster-name { color: var(--accent3); }
+    .poster-name { color: var(--text); }
+    .title-name { color: var(--text); }
+
     .btn { border-radius: 999px; font-weight: 700; }
     .btn-primary { background: var(--grad); border: none; color: #fff; }
     .btn-primary:hover, .btn-primary:focus { background: var(--grad2); color: #fff; box-shadow: 0 0 1rem rgba(139,92,246,.4); }
@@ -226,10 +233,22 @@ function posterFallback(img) {
   const ph = document.createElement('div');
   ph.className = 'poster-ph ' +
     [...img.classList].filter(c => c.startsWith('rounded')).join(' ');
-  ph.textContent = 'Нет постера';
+  // различаем «постера нет» и «постер не загрузился» (нет сети/блок CDN)
+  ph.textContent = 'Не загрузился';
+  ph.title = 'Постер не загрузился — проверьте доступ к интернету';
   img.replaceWith(ph);
 }
-document.addEventListener('error', e => posterFallback(e.target), true);
+// одна попытка перезагрузки: картинка могла не успеть / CDN моргнул
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (!img || img.tagName !== 'IMG' || !img.classList.contains('poster')) return;
+  if (!img.dataset.retried) {
+    img.dataset.retried = '1';
+    img.src = img.src;           // перезапрос
+    return;
+  }
+  posterFallback(img);
+}, true);
 document.querySelectorAll('img.poster').forEach(img => {
   if (img.complete && img.naturalWidth === 0) posterFallback(img);
 });

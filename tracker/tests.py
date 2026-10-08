@@ -641,6 +641,55 @@ class HomeSearchTest(TestCase):
         self.assertNotContains(page, 'Искать по своей коллекции')
 
 
+class PosterTest(TestCase):
+    """Постеры: размер картинки по месту и читаемость названий."""
+
+    def setUp(self):
+        self.user = _register(self.client, 'posteruser')
+        self.title = Title.objects.create(
+            name='Довод', poster_url='https://image.tmdb.org/t/p/w500/abc.jpg')
+        self.entry = Entry.objects.create(user=self.user, title=self.title)
+
+    def test_filter_replaces_tmdb_size(self):
+        from .templatetags.tracker_extras import poster
+        self.assertEqual(poster('https://image.tmdb.org/t/p/w500/abc.jpg', 'w342'),
+                         'https://image.tmdb.org/t/p/w342/abc.jpg')
+        self.assertEqual(poster('https://image.tmdb.org/t/p/w342/a/b.jpg', 'w154'),
+                         'https://image.tmdb.org/t/p/w154/a/b.jpg')
+
+    def test_filter_keeps_foreign_posters(self):
+        """Ссылки IMDb и пустые значения не трогаем."""
+        from .templatetags.tracker_extras import poster
+        url = 'https://m.media-amazon.com/images/M/x.jpg'
+        self.assertEqual(poster(url, 'w342'), url)
+        self.assertEqual(poster('', 'w342'), '')
+        self.assertEqual(poster(None, 'w342'), None)
+
+    def test_collection_card_uses_small_poster(self):
+        """В карточке коллекции постер мельче и грузится лениво."""
+        page = self.client.get(reverse('entry_list'))
+        self.assertContains(page, 'image.tmdb.org/t/p/w342/abc.jpg')
+        self.assertNotContains(page, 'image.tmdb.org/t/p/w500/abc.jpg')
+        self.assertContains(page, 'loading="lazy"')
+
+    def test_entry_page_uses_large_poster(self):
+        """На странице фильма постер в полном размере и без lazy."""
+        page = self.client.get(reverse('entry_detail', args=[self.entry.pk]))
+        self.assertContains(page, 'image.tmdb.org/t/p/w500/abc.jpg')
+
+    def test_card_title_is_readable(self):
+        """Ссылка карточки не использует тёмный text-dark из Bootstrap."""
+        page = self.client.get(reverse('entry_list'))
+        self.assertNotContains(page, 'text-decoration-none text-dark')
+        self.assertContains(page, 'poster-card')
+
+    def test_loading_failure_is_reported(self):
+        """При сбое загрузки показываем «Не загрузился», а не «Нет постера»."""
+        page = self.client.get(reverse('entry_list'))
+        self.assertContains(page, "ph.textContent = 'Не загрузился'")
+        self.assertContains(page, 'img.dataset.retried')
+
+
 class SettingsTest(TestCase):
     """Секреты вынесены в переменные окружения, а не лежат в репозитории."""
 
