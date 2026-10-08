@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{# Хаб правовых документов: список всех страниц-соглашений. #}
+{% block content %}
+<h2 class="mb-3">Правовая информация</h2>
+<p class="text-muted">
+  Документы сайта CINNemaList подготовлены в соответствии с законодательством
+  Российской Федерации и доступны без входа в учётную запись.
+</p>
+<div class="row">
+  {% for p in pages %}
+    <div class="col-md-6 mb-3">
+      <a href="{% url 'legal_page' p.slug %}" class="card h-100 text-decoration-none text-reset hover-card">
+        <div class="card-body">
+          <h5 class="mb-1">{{ p.title }}</h5>
+          <span class="small text-muted">Открыть документ →</span>
+        </div>
+      </a>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block content %}
+{# Отдельная страница фильма ВНЕ коллекции: только информация и описание.
+   Плеера, вкладок и кнопок редактирования здесь намеренно нет — всё
+   появляется после того, как фильм добавлен в коллекцию. #}
+<div class="mb-3">
+  <a href="{% url 'home' %}" class="small text-decoration-none">← Назад к поиску</a>
+</div>
+
+<div class="row">
+  {# --- постер и кнопка добавления #}
+  <div class="col-md-3 mb-3">
+    {% if title.poster_url %}
+      <img src="{{ title.poster_url }}" class="poster shadow-sm" alt="{{ title.name }}">
+    {% else %}
+      <div class="poster-ph">Нет постера</div>
+    {% endif %}
+
+    <div class="d-grid gap-2 mt-2">
+      {% if entry %}
+        {# фильм уже добавлен — просто показываем, где он лежит #}
+        <span class="btn btn-success">✓ Уже в вашей коллекции</span>
+        <a href="{% url 'entry_detail' entry.pk %}" class="btn btn-outline-primary">
+          Открыть карточку в коллекции
+        </a>
+      {% else %}
+        {# кнопка «Добавить в коллекцию»: после добавления возвращаемся
+           сюда же (next = текущий адрес), где уже появится ссылка выше #}
+        <form method="post" action="{% url 'tmdb_add' media_type tmdb_id %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.path }}">
+          <button class="btn btn-success w-100">+ Добавить в коллекцию</button>
+        </form>
+        <span class="small text-muted text-center">
+          В коллекции появятся статус, оценка, теги, рецензия и плеер.
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# --- основная информация о фильме #}
+  <div class="col-md-9">
+    <h2 class="mb-1">{{ title.name }}</h2>
+    {% if title.original_name and title.original_name != title.name %}
+      <div class="text-muted small mb-1">{{ title.original_name }}</div>
+    {% endif %}
+    <div class="text-muted mb-3">
+      {% if title.year %}{{ title.year }} · {% endif %}
+      {{ title.get_type_display }} · {{ title.duration_min }} мин
+      {% if title.director %} · {{ title.director }}{% endif %}
+    </div>
+
+    <div class="mb-3">
+      {% for g in title.genres.all %}<span class="badge bg-info">{{ g }}</span> {% empty %}
+        <span class="text-muted small">Жанры не указаны</span>
+      {% endfor %}
+    </div>
+
+    {# рейтинги сторонних сайтов (карточки одинаковые с вкладкой «Информация») #}
+    {% if rating_cards %}
+      <h6 class="mb-2">Рейтинги</h6>
+      <div class="row g-2 mb-3">
+        {% for r in rating_cards %}
+        <div class="col-4 col-lg-2">
+          <div class="card rating-card text-center h-100 {{ r.color }}">
+            <div class="card-body p-2">
+              {% if r.link %}
+                <a href="{{ r.link }}" target="_blank" rel="noopener" class="text-decoration-none text-reset">
+                  <div class="value">{{ r.value }}</div>
+                  <div class="label">{{ r.name }}</div>
+                </a>
+              {% else %}
+                <div class="value">{{ r.value }}</div>
+                <div class="label">{{ r.name }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <h6>Описание</h6>
+    {% if title.overview or details.overview %}
+      <p>{{ title.overview|default:details.overview }}</p>
+    {% else %}
+      <p class="text-muted">Описание не найдено.</p>
+    {% endif %}
+
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Режиссёр</dt>
+      <dd class="col-sm-8">{{ title.director|default:"—" }}</dd>
+
+      {% if cast %}
+        <dt class="col-sm-4">В ролях</dt>
+        <dd class="col-sm-8">{{ cast|join:", " }}</dd>
+      {% endif %}
+
+      <dt class="col-sm-4">Ссылки</dt>
+      <dd class="col-sm-8">
+        {% if imdb_id %}
+          <a href="https://www.imdb.com/title/{{ imdb_id }}/"
+             target="_blank" rel="noopener">IMDb</a>
+        {% endif %}
+        {% if title.tmdb_id %}
+          {% if imdb_id %} · {% endif %}
+          <a href="https://www.themoviedb.org/{{ title.tmdb_type|default:'movie' }}/{{ title.tmdb_id }}"
+             target="_blank" rel="noopener">TMDB</a>
+        {% endif %}
+        {% if not imdb_id and not title.tmdb_id %}—{% endif %}
+      </dd>
+    </dl>
+
+    <p class="small text-muted mt-4 mb-0">
+      Страница показывает информацию из баз TMDB/IMDb. Оценки, рецензии,
+      теги и просмотр становятся доступны после добавления в коллекцию.
+    </p>
+  </div>
+</div>
+{% endblock %}

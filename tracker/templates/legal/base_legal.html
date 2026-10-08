@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{# Общий каркас всех правовых документов: меню слева + текст справа. #}
+{% block content %}
+<div class="row">
+  <div class="col-lg-4 col-xl-3 mb-3">
+    <div class="card sticky-top" style="top: 1rem; z-index: 100;">
+      <div class="card-header fw-semibold">Правовая информация</div>
+      <div class="list-group list-group-flush">
+        {% for p in pages %}
+          <a class="list-group-item list-group-item-action {% if request.resolver_match.kwargs.page == p.slug %}active{% endif %}"
+             href="{% url 'legal_page' p.slug %}">{{ p.title }}</a>
+        {% endfor %}
+        <a class="list-group-item list-group-item-action {% if not request.resolver_match.kwargs.page %}active{% endif %}"
+           href="{% url 'legal_index' %}">Все документы</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8 col-xl-9">
+    <h2 class="mb-3">{{ doc_title }}</h2>
+    <div class="card card-body">
+      {% block legal_content %}{% endblock %}
+    </div>
+    <p class="small text-muted mt-3 mb-0">
+      Редакция от 8 октября 2026 г. Продолжая пользоваться сайтом, вы
+      подтверждаете, что ознакомились с документом.
+    </p>
+  </div>
+</div>
+{% endblock %}
