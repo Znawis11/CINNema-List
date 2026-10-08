@@ -2,15 +2,19 @@
 {% for r in results %}
   <div class="col-md-3 mb-3">
     <div class="card h-100">
-      {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top poster" alt="{{ r.title }}">{% endif %}
-      <div class="card-body">
-        <h5>{{ r.title }}</h5>
-        <div class="text-muted small">
-          {{ r.year }} · {% if r.media_type == 'tv' %}сериал{% else %}фильм{% endif %}
-          {% if r.rating %}· ⭐ {{ r.rating }}{% endif %}
+      {# вся карточка — ссылка на отдельную страницу фильма (вне коллекции);
+         кнопка «Добавить в коллекцию» внизу остаётся отдельной формой #}
+      <a href="{% url 'film_detail' r.media_type r.id %}" class="text-decoration-none text-dark">
+        {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top poster" alt="{{ r.title }}">{% endif %}
+        <div class="card-body">
+          <h5>{{ r.title }}</h5>
+          <div class="text-muted small">
+            {{ r.year }} · {% if r.media_type == 'tv' %}сериал{% else %}фильм{% endif %}
+            {% if r.rating %}· ⭐ {{ r.rating }}{% endif %}
+          </div>
+          {% if r.local %}<span class="badge bg-success">Скачан на ПК</span>{% endif %}
         </div>
-        {% if r.local %}<span class="badge bg-success">Скачан на ПК</span>{% endif %}
-      </div>
+      </a>
       <div class="card-footer">
         {% if r.added %}
           <span class="badge bg-success">✓ Уже в коллекции</span>

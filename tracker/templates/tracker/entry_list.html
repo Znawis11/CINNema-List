@@ -199,9 +199,55 @@
         <a href="{% url 'entry_list' %}" class="btn btn-sm btn-outline-secondary">Показать все</a>
       </div>
     {% endif %}
-    <div id="results">
-      {% include 'tracker/_entry_cards.html' %}
-    </div>
+
+    {% if pick_mode %}
+      {# Режим «галочек»: форма-обёртка стоит ВОКРУГ карточек, поэтому её
+         поля entries попадают в общий submit; сама форма не заменяется
+         при htmx-обновлении (меняется только #results внутри неё). #}
+      <form method="post" action="{% url 'entry_list' %}" id="pickForm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add">
+        {# back=main — после добавления вернуться в этот список, а не в подборку #}
+        <input type="hidden" name="back" value="main">
+        <div class="card card-body mb-3 py-2 d-flex flex-wrap gap-2 align-items-center">
+          <span class="fw-semibold text-nowrap">Добавить в подборку:</span>
+          <select name="collection" class="form-select form-select-sm" style="max-width:240px"
+                  aria-label="Выберите подборку">
+            {% for c in collections %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
+          </select>
+          <label class="form-check small text-muted mb-0 mx-1">
+            <input class="form-check-input" type="checkbox" id="pickAll"> Выбрать все
+          </label>
+          <button class="btn btn-sm btn-success text-nowrap ms-auto">＋ Добавить выбранные</button>
+        </div>
+        <div id="results">
+          {% include 'tracker/_entry_cards.html' %}
+        </div>
+      </form>
+      <p class="small text-muted mt-2">
+        Отметьте фильмы галочками в правом верхнем углу карточек и нажмите
+        «Добавить выбранные».
+      </p>
+      <script>
+        // «Выбрать все» — переключает галочки всех карточек текущей выдачи
+        const pickAll = document.getElementById('pickAll');
+        if (pickAll) pickAll.addEventListener('change', () => {
+          document.querySelectorAll('input[name="entries"]')
+                  .forEach(c => { c.checked = pickAll.checked; });
+        });
+        // без единой отметки отправлять некуда — просим выбрать фильмы
+        document.getElementById('pickForm').addEventListener('submit', e => {
+          if (!document.querySelector('input[name="entries"]:checked')) {
+            e.preventDefault();
+            alert('Отметьте хотя бы один фильм галочкой.');
+          }
+        });
+      </script>
+    {% else %}
+      <div id="results">
+        {% include 'tracker/_entry_cards.html' %}
+      </div>
+    {% endif %}
 
     {% if active_collection and other_entries %}
       <section class="card card-body mt-3">

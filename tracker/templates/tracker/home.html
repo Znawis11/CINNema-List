@@ -31,9 +31,12 @@
   </h5>
   <div class="popular-row">
     {% for p in popular %}
+    {# Карточка ведёт на отдельную страницу фильма: IMDb-id превращаем
+       в TMDB-id уже на сервере (views.film_by_imdb); если TMDB не знает
+       фильм — остаётся запасной путь, обычный поиск на главной. #}
     <a class="pop-card card h-100 hover-card"
-       href="{% url 'home' %}?q={{ p.title|urlencode }}"
-       title="Найти «{{ p.title }}» в базе">
+       href="{% if p.id %}{% url 'film_by_imdb' p.id %}?q={{ p.title|urlencode }}{% else %}{% url 'home' %}?q={{ p.title|urlencode }}{% endif %}"
+       title="Открыть «{{ p.title }}»">
       {% if p.poster %}
         <img src="{{ p.poster }}" class="poster" alt="{{ p.title }}" loading="lazy">
       {% else %}

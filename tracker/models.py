@@ -1,3 +1,9 @@
+"""Модели сайта: фильмы (Title), записи коллекции (Entry), серийность (Episode),
+подборки (Collection), теги, папки библиотеки и сессии просмотра.
+
+Пользователь работает через Entry — одна запись на (пользователя, фильм).
+Title общий для всех: сведения из TMDB хранятся один раз на фильм.
+"""
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -10,6 +16,7 @@ class Genre(models.Model):
 
 
 class Title(models.Model):
+    """Фильм/сериал: общие сведения (из TMDB) и привязанный локальный файл."""
     TYPES = [('movie', 'Фильм'), ('series', 'Сериал'), ('doc', 'Документальный')]
     name = models.CharField(max_length=255)
     director = models.CharField(max_length=255, blank=True)
@@ -37,6 +44,7 @@ class Title(models.Model):
 
 
 class Tag(models.Model):
+    """Пользовательский тег (фильтруется на главной, свой у каждого юзера)."""
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=50)
 
@@ -45,6 +53,7 @@ class Tag(models.Model):
 
 
 class Entry(models.Model):
+    """Фильм в коллекции пользователя: статус, оценка, рецензия, где смотреть."""
     STATUSES = [('watched', 'Просмотрено'),
                 ('watching', 'В процессе'),
                 ('planned', 'В планах')]
@@ -70,14 +79,30 @@ class Entry(models.Model):
 
 
 class Episode(models.Model):
+    """Одна серия сериала: свои данные, независимые от других серий.
+
+    У каждой серии хранится отдельно привязанный видеофайл (local_file)
+    и своя ссылка на стриминг (streaming_url) — при переходе на другую
+    серию данные этой серии никуда не деваются, потому что лежат здесь.
+    """
     entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name='episodes')
     season = models.PositiveIntegerField()
     number = models.PositiveIntegerField()
     watched_at = models.DateField(null=True, blank=True)
     local_file = models.CharField(max_length=500, blank=True)  # свой файл у серии
+    # своя ссылка этой серии на стриминговый сервис (пусто — смотрим файл)
+    streaming_url = models.URLField(blank=True)
+
+    class Meta:
+        # одна строка на (серию, сезон, номер) — данные не задвигаются
+        unique_together = ('entry', 'season', 'number')
+
+    def __str__(self):
+        return f'{self.entry}: S{self.season}E{self.number}'
 
 
 class Collection(models.Model):
+    """Подборка: имя и произвольный набор фильмов пользователя (M2M)."""
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     entries = models.ManyToManyField(Entry, blank=True)
@@ -87,6 +112,7 @@ class Collection(models.Model):
 
 
 class LibraryFolder(models.Model):
+    """Папка пользователя, в которой сканируются видеофайлы для плеера."""
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     path = models.CharField(max_length=500)
 

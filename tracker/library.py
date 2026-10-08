@@ -1,3 +1,4 @@
+"""Работа с видеофайлами: поиск, сканирование папок, безопасные пути."""
 import os
 import re
 import time
@@ -11,10 +12,12 @@ _cache = {}
 
 
 def norm(s):
+    """Нормализация названия для сравнения: без знаков и в нижнем регистре."""
     return re.sub(r'[\W_]+', '', (s or '').lower())
 
 
 def user_folders(user):
+    """Список папок пользователя, в которых ищутся фильмы."""
     from .models import LibraryFolder
     return list(LibraryFolder.objects.filter(user=user).values_list('path', flat=True))
 

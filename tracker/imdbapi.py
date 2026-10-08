@@ -38,6 +38,7 @@ _CHART_URL = 'https://www.imdb.com/chart/moviemeter/'
 
 
 def _http(url, **kw):
+    """GET с браузерным User-Agent; None при ошибке или пустом ответе."""
     try:
         r = requests.get(url, headers={'User-Agent': UA,
                                        'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'},
@@ -178,4 +179,5 @@ def popular(limit=18):
 
 
 def page_url(imdb_id):
+    """Прямая ссылка на страницу фильма на IMDb (пусто, если id нет)."""
     return f'https://www.imdb.com/title/{imdb_id}/' if imdb_id else ''

@@ -132,6 +132,10 @@
     .popular-row::-webkit-scrollbar { height: 8px; }
     .popular-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+    /* галочка выбора фильма для добавления в подборку (колонка «Все фильмы») */
+    .pick-mark { position: absolute; top: 6px; right: 6px; z-index: 5; padding: .2rem .3rem; border-radius: .6rem; background: rgba(13,10,26,.78); border: 1px solid var(--border); }
+    .pick-mark .form-check-input { width: 1.35em; height: 1.35em; cursor: pointer; }
+
     /* прогресс */
     .progress { background: var(--bg2); border-radius: 999px; }
     .progress-bar { background: var(--grad); border-radius: 999px; }
@@ -209,6 +213,36 @@
   {% endif %}
   {% block content %}{% endblock %}
 </div>
+
+{# --- футер: реквизиты, возрастная маркировка 18+ и правовые документы.
+   По законодательству РФ на сайте должны быть доступны: пользовательское
+   соглашение, политика обработки персональных данных (152-ФЗ), согласие
+   на обработку ПДн, сведения об операторе и контакты, а также отметка
+   о возрастной маркировке (436-ФЗ) и о том, что сайт не является СМИ. #}
+<footer class="mt-5 pt-4" style="border-top: 2px solid var(--border)">
+  <div class="container">
+    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center">
+      <span class="small text-muted">© 2026 CINNemaList — персональный кинотрекер</span>
+      <div class="d-flex flex-wrap gap-3 small">
+        <a href="{% url 'legal_index' %}">Правовая информация</a>
+        <a href="{% url 'legal_page' 'agreement' %}">Пользовательское соглашение</a>
+        <a href="{% url 'legal_page' 'privacy' %}">Конфиденциальность</a>
+        <a href="{% url 'legal_page' 'consent' %}">Согласие на обработку ПДн</a>
+        <a href="{% url 'legal_page' 'disclaimer' %}">Отказ от ответственности</a>
+        <a href="{% url 'legal_page' 'contacts' %}">Контакты</a>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-dark border fw-bold" title="Возрастная маркировка: 18+">18+</span>
+        <span class="small text-muted">Сайт не является СМИ</span>
+      </div>
+    </div>
+    <p class="small text-muted mt-2 mb-4">
+      Сайт не размещает и не предоставляет доступ к аудиовизуальным произведениям:
+      в плеере воспроизводятся исключительно файлы, добавленные пользователем
+      с собственного устройства. Сведения о фильмах приведены в справочных целях.
+    </p>
+  </div>
+</footer>
 <input type="file" id="fileDialogInput" accept=".mp4,.mkv,.avi,video/*" class="d-none">
 <script>
 // Постер не загрузился (например, недоступен хост изображений) —

@@ -1,3 +1,8 @@
+"""Клиент TMDB: поиск, детали фильма, сезоны сериала, жанры.
+
+Ответы кэшируются на TTL, при ошибке сети флаг offline() становится True —
+по нему шаблоны показывают «нет связи» вместо пустых карточек.
+"""
 import time
 
 import requests
@@ -11,6 +16,7 @@ _offline = False   # True, если последний запрос к TMDB не
 
 
 def _get(path, **params):
+    """GET-запрос к API с кэшем и обработкой сетевых ошибок (не падает)."""
     global _offline
     key = (path, tuple(sorted(params.items())))
     hit = _cache.get(key)
@@ -38,6 +44,7 @@ def offline():
 
 
 def _movie(r):
+    """Приводит объект фильма из ответа TMDB к виду карточки для шаблона."""
     date = r.get('release_date') or r.get('first_air_date') or ''
     return {
         'id': r['id'],
@@ -51,6 +58,7 @@ def _movie(r):
 
 
 def search(query):
+    """Поиск фильмов и сериалов по названию (только movie/tv)."""
     data = _get('/search/multi', query=query)
     out = []
     for r in data.get('results', []):
@@ -66,8 +74,26 @@ def popular():
     return [_movie(r) for r in data.get('results', []) if r.get('poster_path')]
 
 
+def find_by_imdb(imdb_id):
+    """TMDB-id и тип медиа по IMDb-id (tt0111161 -> ('movie', 278)).
+
+    Нужно для карточек «Популярное сейчас»: они приходят из IMDb, а
+    страница фильма строится по данным TMDB. None — если TMDB не знает
+    такой id (нет интернета, фильм отсутствует в базе).
+    """
+    if not imdb_id:
+        return None
+    data = _get('/find/' + imdb_id, external_source='imdb_id')
+    for key in ('movie_results', 'tv_results'):   # сначала фильмы, потом сериалы
+        for r in data.get(key) or []:
+            if r.get('id'):
+                return ('tv' if key == 'tv_results' else 'movie', r['id'])
+    return None
+
+
 def details(media_type, tmdb_id):
-    data = _get(f'/{media_type}/{tmdb_id}', append_to_response='credits')
+    """Подробности фильма: жанры, описание, актёры и внешние id (IMDb)."""
+    data = _get(f'/{media_type}/{tmdb_id}', append_to_response='credits,external_ids')
     return data if data.get('id') else None
 
 

@@ -26,6 +26,14 @@
           </div>
         </div>
       </a>
+      {% if pick_mode %}
+        {# галочка выбора фильма для добавления в подборку (см. entry_list) #}
+        <div class="pick-mark">
+          <input class="form-check-input" type="checkbox" name="entries" value="{{ e.pk }}"
+                 id="pick-{{ e.pk }}" title="Выбрать для подборки"
+                 aria-label="Выбрать «{{ e.title.name }}»">
+        </div>
+      {% endif %}
       {% if active_collection %}
         <form method="post" action="{% url 'entry_list' %}"
               style="position:absolute;top:4px;right:4px"

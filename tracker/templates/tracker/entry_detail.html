@@ -248,11 +248,15 @@
                 {% if ep.watched_at %}
                   <span class="badge bg-success">✓ {{ ep.watched_at|date:"d.m.Y" }}</span>
                 {% endif %}
+                {# свои данные этой серии: файл и/или ссылка #}
                 {% if ep.local_file %}
                   <div class="text-truncate small text-muted" title="{{ ep.local_file }}">🎬 {{ ep.local_file }}</div>
                 {% endif %}
+                {% if ep.streaming_url %}
+                  <div class="text-truncate small text-muted" title="{{ ep.streaming_url }}">🔗 {{ ep.streaming_url }}</div>
+                {% endif %}
               </div>
-              {% if ep.local_file %}
+              {% if ep.local_file or ep.streaming_url %}
                 <a class="btn btn-sm btn-primary text-nowrap"
                    href="{% url 'entry_detail' entry.pk %}?tab=player&season={{ current_season }}&ep={{ ep.ep_pk }}">▶ Смотреть</a>
               {% endif %}
@@ -328,7 +332,10 @@
         </form>
       </div>
 
-      {% if entry.location == 'streaming' %}
+      {# У обычного фильма метка «стриминг» прячет плеер (смотреть по ссылке).
+         У СЕРИАЛА этого не делаем: у каждой серии свой файл/ссылка, и панель
+         с выбором серий должна остаться доступной при любом состоянии. #}
+      {% if entry.location == 'streaming' and not is_series %}
         <div class="alert alert-primary d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
           <span>Фильм хранится на стриминговом сервисе.</span>
           {% if entry.streaming_url %}

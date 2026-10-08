@@ -11,6 +11,7 @@ UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like 
 
 
 def _omdb(**params):
+    """Запрос к OMDb по ключу из настроек; пустой dict при ошибке/без ключа."""
     if not settings.OMDB_API_KEY:
         return {}
     params['apikey'] = settings.OMDB_API_KEY
@@ -24,6 +25,7 @@ def _omdb(**params):
 
 
 def _rating_from(data, source):
+    """Значение рейтинга нужного источника (IMDb / RT / Metacritic)."""
     for item in data.get('Ratings', []):
         if item.get('Source') == source:
             return item.get('Value', '')
@@ -31,6 +33,7 @@ def _rating_from(data, source):
 
 
 def _kp(imdb_id):
+    """Оценка Кинопоиска по IMDb-id (без ключа API — возвращает None)."""
     if not settings.KINOPOISK_API_KEY or not imdb_id:
         return None
     try:

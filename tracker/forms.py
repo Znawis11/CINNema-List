@@ -26,6 +26,7 @@ class EntryForm(forms.ModelForm):
         }
 
     def __init__(self, *args, user=None, **kwargs):
+        """Форма фильма: подставляет данные Title и ограничивает теги юзером."""
         super().__init__(*args, **kwargs)
         self.user = user
         self.fields['tags'].queryset = Tag.objects.filter(user=user)
@@ -42,12 +43,14 @@ class EntryForm(forms.ModelForm):
                 f.widget.attrs.setdefault('class', 'form-control')
 
     def clean_rating(self):
+        """Оценка только от 1 до 5 (пусто — просмотрено без оценки)."""
         r = self.cleaned_data.get('rating')
         if r is not None and not 1 <= r <= 5:
             raise forms.ValidationError('Оценка от 1 до 5')
         return r
 
     def save(self, commit=True):
+        """Сохраняет и запись коллекции, и связанный с ней Title целиком."""
         entry = super().save(commit=False)
         title = entry.title if entry.pk else Title()
         d = self.cleaned_data

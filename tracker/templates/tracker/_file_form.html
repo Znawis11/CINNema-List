@@ -1,10 +1,18 @@
+{# Привязка файла из подключённых папок.
+   Если открыта конкретная серия (есть playing) — в форму подставляются
+   season/number, и файл запишется в Episode этой серии, а не в общий
+   фильм (views.entry_detail передаёт их в _bind_path). #}
 <form method="post" action="{% url 'entry_detail' entry.pk %}?tab=player" class="d-flex gap-2 flex-wrap align-items-center">
   {% csrf_token %}
+  {% if playing %}
+    <input type="hidden" name="season" value="{{ playing.season }}">
+    <input type="hidden" name="number" value="{{ playing.number }}">
+  {% endif %}
   <select name="file" class="form-select form-select-sm" style="max-width:420px">
     {% for f in files %}<option value="{{ f }}">{{ f }}</option>{% empty %}<option disabled>В указанных папках нет видео</option>{% endfor %}
   </select>
   <button class="btn btn-sm btn-secondary text-nowrap" {% if not files %}disabled{% endif %}>Привязать из папок</button>
-  {% include 'tracker/_file_dialog.html' with class='btn-sm btn-primary' label='📁 Выбрать файл…' %}
+  {% include 'tracker/_file_dialog.html' with season=playing.season number=playing.number class='btn-sm btn-primary' label='📁 Выбрать файл…' %}
   <a class="btn btn-sm btn-outline-secondary text-nowrap"
-     href="{% url 'file_pick' entry.pk %}">Искать по папкам</a>
+     href="{% url 'file_pick' entry.pk %}{% if playing %}?season={{ playing.season }}&number={{ playing.number }}{% endif %}">Искать по папкам</a>
 </form>

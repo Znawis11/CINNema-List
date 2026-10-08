@@ -95,6 +95,7 @@ def home(request):
 
 
 def register(request):
+    """Регистрация: создаёт учётную запись и сразу входит в систему."""
     form = UserCreationForm(request.POST or None)
     if form.is_valid():
         login(request, form.save())
@@ -110,9 +111,13 @@ def _collection_action(request):
 
     if action == 'create':
         if name:
-            coll = Collection.objects.create(user=request.user, name=name)
-            messages.success(request, f'Подборка «{name}» создана.')
-            return redirect(f"{reverse('entry_list')}?collection={coll.pk}")
+            # подборка просто создаётся; остаёмся в основном списке, где её
+            # можно наполнить, отметив фильмы галочками (см. entry_list)
+            Collection.objects.create(user=request.user, name=name)
+            messages.success(request, f'Подборка «{name}» создана — отметьте '
+                                      f'в списке нужные фильмы галочками и '
+                                      f'нажмите «Добавить в подборку».')
+            return redirect('entry_list')
         messages.warning(request, 'Назовите подборку.')
         return redirect('entry_list')
 
@@ -130,11 +135,20 @@ def _collection_action(request):
         messages.success(request, f'Подборка «{cname}» удалена.')
         return redirect('entry_list')
     elif action == 'add':
+        # добавление в подборку: из её собственной страницы (select) и
+        # из основного списка (галочки на карточках + селектор подборки)
         ids = request.POST.getlist('entries')
         entries = list(Entry.objects.filter(pk__in=ids, user=request.user))
         if entries:
             coll.entries.add(*entries)
-            messages.success(request, f'В подборку добавлено: {len(entries)}.')
+            messages.success(request, f'В подборку «{coll.name}» добавлено: '
+                                      f'{len(entries)}.')
+        if request.POST.get('back') == 'main':
+            # добавляли из основного списка — возвращаемся в него, чтобы
+            # можно было сразу отметить следующую партию фильмов
+            if not entries:
+                messages.warning(request, 'Отметьте хотя бы один фильм галочкой.')
+            return redirect('entry_list')
     elif action == 'remove':
         entry = coll.entries.filter(pk=request.POST.get('entry')).first()
         if entry:
@@ -145,6 +159,11 @@ def _collection_action(request):
 
 @login_required
 def entry_list(request):
+    """Основной список коллекции + подборки слева.
+
+    GET — карточки фильмов (с поиском, фильтрами и сортировкой), POST —
+    действия с подборками (создание, добавление фильмов галочками и т. п.).
+    """
     if request.method == 'POST':
         return _collection_action(request)
 
@@ -240,6 +259,14 @@ def entry_list(request):
     else:
         entries.sort(key=lambda e: e.added_at, reverse=True)
 
+    # подборки пользователя (для сайдбара и для добавления галочками)
+    collections = (Collection.objects.filter(user=request.user)
+                   .annotate(n=Count('entries')).order_by('name'))
+
+    # режим «галочек»: включается только в основном списке (без открытой
+    # подборки) и только если подборки уже созданы — иначе добавлять некуда
+    pick_mode = active_collection is None and bool(collections)
+
     ctx = {'entries': entries, 'q': q, 'status': status, 'sort': sort,
            'dur': dur, 'min_rating': request.GET.get('min_rating', ''),
            'min_score': request.GET.get('min_score', ''), 'type': title_type,
@@ -249,9 +276,8 @@ def entry_list(request):
            'types': Title.TYPES, 'my_ratings': MY_RATINGS,
            'site_ratings': SITE_RATINGS, 'reviews': REVIEWS,
            'locations': LOCATIONS,
-           'collections': Collection.objects.filter(user=request.user)
-                                            .annotate(n=Count('entries'))
-                                            .order_by('name'),
+           'collections': collections,
+           'pick_mode': pick_mode,
            'active_collection': active_collection,
            'other_entries': other_entries,
            'all_genres': Genre.objects.all().order_by('name'),
@@ -269,6 +295,7 @@ def entry_list(request):
 
 @login_required
 def entry_create(request):
+    """Добавление фильма вручную (без поиска через TMDB)."""
     form = EntryForm(request.POST or None, user=request.user)
     if form.is_valid():
         entry = form.save()
@@ -280,6 +307,7 @@ def entry_create(request):
 
 @login_required
 def entry_update(request, pk):
+    """Редактирование записи о фильме в коллекции."""
     entry = get_object_or_404(Entry, pk=pk, user=request.user)
     form = EntryForm(request.POST or None, instance=entry, user=request.user)
     if form.is_valid():
@@ -291,6 +319,7 @@ def entry_update(request, pk):
 
 @login_required
 def entry_delete(request, pk):
+    """Удаление фильма из коллекции (GET — подтверждение, POST — удаление)."""
     entry = get_object_or_404(Entry, pk=pk, user=request.user)
     if request.method == 'POST':
         entry.delete()
@@ -303,8 +332,10 @@ def entry_delete(request, pk):
 def _series_ctx(request, entry, season=None):
     """Сезоны и серии сериала (общие для вкладок «Серии» и «Видеоплеер»).
 
-    К каждой серии добавляются: watched_at (отметка пользователя) и
-    local_file (привязанный видеофайл).
+    К каждой серии добавляются её СОБСТВЕННЫЕ данные из таблицы Episode:
+    watched_at (отметка пользователя), local_file (привязанный видеофайл)
+    и streaming_url (ссылка на эту серию) — поэтому при переходе на другую
+    серию данные предыдущей никуда не пропадают.
     """
     title = entry.title
     watched = {(e.season, e.number): e for e in entry.episodes.all()}
@@ -359,15 +390,23 @@ def _series_ctx(request, entry, season=None):
 
 @login_required
 def entry_detail(request, pk):
+    """Карточка фильма в коллекции: вкладки информация / плеер / серии / оценка.
+
+    POST — привязка видеофайла: с season/number файл пишется в Episode
+    конкретной серии, без них — в Title (обычный фильм).
+    """
     entry = get_object_or_404(Entry, pk=pk, user=request.user)
     title = entry.title
 
     if request.method == 'POST':  # привязка видеофайла (вкладка «Видеоплеер»)
         path = request.POST.get('file', '')
+        season = request.POST.get('season', '')
+        number = request.POST.get('number', '')
         if library.safe_path(library.user_folders(request.user), path) \
                 or library.resolve(path):
-            title.local_file = path
-            title.save(update_fields=['local_file'])
+            # есть season/number — файл принадлежит конкретной серии
+            # (_bind_path сам решит, в Episode или в Title его записать)
+            return redirect(_bind_path(request, entry, path, season, number))
         return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=player")
 
     tab = request.GET.get('tab', 'info')
@@ -483,6 +522,35 @@ def entry_location(request, pk):
             messages.warning(request, 'Фильм отмечен как стриминговый — '
                                       'не забудьте указать ссылку на него.')
     return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=player")
+
+
+@login_required
+@require_POST
+def episode_stream(request, pk):
+    """Ссылка конкретной серии на стриминг (пишется в Episode.streaming_url).
+
+    Ссылка принадлежит серии, а не всему сериалу: при переходе на другую
+    серию у каждой остаётся своя. Пустое поле — ссылку убираем.
+    """
+    entry = get_object_or_404(Entry, pk=pk, user=request.user)
+    season = request.POST.get('season', '')
+    number = request.POST.get('number', '')
+    back = f"{reverse('entry_detail', args=[entry.pk])}?tab=player"
+    if not (season.isdigit() and number.isdigit()):
+        return redirect(back)
+
+    # нормализуем вид ссылки и обрезаем по лимиту поля URLField (200 симв.)
+    url = _streaming_url(request.POST.get('streaming_url'))[:200]
+    ep, _ = Episode.objects.get_or_create(entry=entry, season=int(season),
+                                          number=int(number))
+    ep.streaming_url = url
+    ep.save(update_fields=['streaming_url'])
+    if url:
+        messages.success(request, f'Ссылка для S{season}E{number} сохранена.')
+    else:
+        messages.info(request, f'Ссылка для S{season}E{number} удалена.')
+    # возвращаемся к той же серии, чтобы сразу увидеть сохранённые данные
+    return redirect(f'{back}&season={season}&ep={ep.pk}')
 
 
 @login_required
@@ -710,6 +778,7 @@ def tmdb_page(request):
 
 @login_required
 def tmdb_results(request):
+    """Результаты поиска по TMDB (запрос htmx-формы на главной)."""
     q = request.GET.get('q', '').strip()
     results = tmdb.search(q) if len(q) >= 2 else []
     folders = library.user_folders(request.user)
@@ -730,63 +799,183 @@ def tmdb_results(request):
                   {'results': results, 'q': q, 'offline': tmdb.offline()})
 
 
+def _title_from_tmdb(request, media_type, tmdb_id):
+    """Возвращает Title для фильма из TMDB: находит существующий или создаёт.
+
+    Запись создаётся один раз на фильм (ищется по tmdb_id + tmdb_type),
+    дальше переиспользуется всеми пользователями. Здесь НЕ создаётся
+    запись в коллекции (Entry) — это делает отдельная кнопка «Добавить».
+    """
+    title = Title.objects.filter(tmdb_id=tmdb_id, tmdb_type=media_type).first()
+    if title:
+        return title
+
+    d = tmdb.details(media_type, tmdb_id)
+    if not d:
+        return None
+
+    date = d.get('release_date') or d.get('first_air_date') or ''
+    genre_names = [g['name'] for g in d.get('genres', [])]
+    is_doc = 'документальный' in [g.lower() for g in genre_names]
+
+    if media_type == 'movie':
+        director = next((c['name'] for c in d.get('credits', {}).get('crew', [])
+                         if c.get('job') == 'Director'), '')
+        duration = d.get('runtime') or 100
+    else:
+        director = ', '.join(c['name'] for c in d.get('created_by', [])[:2])
+        runtimes = d.get('episode_run_time') or [45]
+        duration = runtimes[0]
+
+    title = Title.objects.create(
+        name=d.get('title') or d.get('name') or '',
+        director=director,
+        type='doc' if is_doc else ('series' if media_type == 'tv' else 'movie'),
+        year=int(date[:4]) if date[:4].isdigit() else None,
+        poster_url=tmdb.IMG + d['poster_path'] if d.get('poster_path') else '',
+        duration_min=duration,
+        tmdb_id=tmdb_id,
+        tmdb_type=media_type,
+        imdb_id=d.get('imdb_id') or '',
+        overview=d.get('overview') or '',
+        tmdb_rating=round(float(d.get('vote_average') or 0), 1) or None,
+        original_name=d.get('original_title') or d.get('original_name') or '',
+        total_episodes=(d.get('number_of_episodes')
+                        if media_type == 'tv' else None),
+    )
+    # сразу подбираем локальный файл и дозапрашиваем рейтинги сторонних сайтов
+    folders = library.user_folders(request.user)
+    title.local_file = library.find(folders, title.name, title.original_name)
+    title.save()
+    for g in genre_names:
+        genre, _ = Genre.objects.get_or_create(name=g.capitalize())
+        title.genres.add(genre)
+    ratings.enrich(title)  # рейтинги IMDb / Rotten Tomatoes / Metacritic
+    return title
+
+
+def _back_url(request, default=None):
+    """Локальный адрес для возврата после POST (защита от open redirect).
+
+    default вычисляется внутри функции: reverse() на этапе импорта модуля
+    ещё не может разрешить адреса (URLconf в этот момент не загружен).
+    """
+    url = request.POST.get('next') or ''
+    if url.startswith('/') and not url.startswith('//'):
+        return url
+    return default or reverse('home')
+
+
 @login_required
 @require_POST
 def tmdb_add(request, media_type, tmdb_id):
+    """Добавить фильм из TMDB в коллекцию пользователя (POST).
+
+    next — куда вернуться после добавления (страница фильма, главная).
+    """
     if media_type not in ('movie', 'tv'):
         return redirect('home')
 
-    title = Title.objects.filter(tmdb_id=tmdb_id, tmdb_type=media_type).first()
+    back = _back_url(request)
+    title = _title_from_tmdb(request, media_type, tmdb_id)
     if not title:
-        d = tmdb.details(media_type, tmdb_id)
-        if not d:
-            messages.error(request, 'Не удалось получить информацию о фильме '
-                                    'из TMDB. Попробуйте ещё раз позже.')
-            return redirect('home')
-
-        date = d.get('release_date') or d.get('first_air_date') or ''
-        genre_names = [g['name'] for g in d.get('genres', [])]
-        is_doc = 'документальный' in [g.lower() for g in genre_names]
-
-        if media_type == 'movie':
-            director = next((c['name'] for c in d.get('credits', {}).get('crew', [])
-                             if c.get('job') == 'Director'), '')
-            duration = d.get('runtime') or 100
-        else:
-            director = ', '.join(c['name'] for c in d.get('created_by', [])[:2])
-            runtimes = d.get('episode_run_time') or [45]
-            duration = runtimes[0]
-
-        title = Title.objects.create(
-            name=d.get('title') or d.get('name') or '',
-            director=director,
-            type='doc' if is_doc else ('series' if media_type == 'tv' else 'movie'),
-            year=int(date[:4]) if date[:4].isdigit() else None,
-            poster_url=tmdb.IMG + d['poster_path'] if d.get('poster_path') else '',
-            duration_min=duration,
-            tmdb_id=tmdb_id,
-            tmdb_type=media_type,
-            imdb_id=d.get('imdb_id') or '',
-            overview=d.get('overview') or '',
-            tmdb_rating=round(float(d.get('vote_average') or 0), 1) or None,
-            original_name=d.get('original_title') or d.get('original_name') or '',
-            total_episodes=(d.get('number_of_episodes')
-                            if media_type == 'tv' else None),
-        )
-        folders = library.user_folders(request.user)
-        title.local_file = library.find(folders, title.name, title.original_name)
-        title.save()
-        for g in genre_names:
-            genre, _ = Genre.objects.get_or_create(name=g.capitalize())
-            title.genres.add(genre)
-        ratings.enrich(title)  # рейтинги IMDb / Rotten Tomatoes / Metacritic
+        messages.error(request, 'Не удалось получить информацию о фильме '
+                                'из TMDB. Попробуйте ещё раз позже.')
+        return redirect(back)
 
     _, created = Entry.objects.get_or_create(user=request.user, title=title)
     if created:
         messages.success(request, f'«{title.name}» добавлен в коллекцию.')
     else:
         messages.info(request, f'«{title.name}» уже есть в вашей коллекции.')
-    return redirect('home')
+    return redirect(back)
+
+
+# --- отдельная страница фильма (вне коллекции) --------------------------------
+
+@login_required
+def film_detail(request, media_type, tmdb_id):
+    """Базовая страница фильма/сериала из TMDB: только описание и рейтинги.
+
+    Сознательно не связана с записью в коллекции: ни плеера, ни вкладок,
+    ни редактирования — только информация и кнопка «Добавить в коллекцию».
+    """
+    if media_type not in ('movie', 'tv'):
+        raise Http404
+
+    title = _title_from_tmdb(request, media_type, tmdb_id)
+    if not title:
+        messages.warning(request, 'Не удалось загрузить информацию о фильме. '
+                                  'Проверьте подключение к интернету и '
+                                  'обновите страницу.')
+        return redirect('home')
+
+    ratings.enrich(title)  # если рейтинги ещё не получены — достроим
+    details = tmdb.details(media_type, tmdb_id) or {}
+    cast = [c.get('name') for c in details.get('credits', {}).get('cast', [])[:8]]
+    # IMDb-id: сначала из своей записи, иначе из свежего ответа TMDB
+    imdb_id = title.imdb_id or (details.get('external_ids') or {}).get('imdb_id', '')
+
+    # есть ли уже фильм в коллекции — чтобы показать правильную кнопку
+    entry = Entry.objects.filter(user=request.user, title=title).first()
+
+    return render(request, 'tracker/film_detail.html', {
+        'title': title,
+        'details': details,
+        'cast': cast,
+        'imdb_id': imdb_id,
+        'entry': entry,
+        'media_type': media_type,
+        'tmdb_id': tmdb_id,
+        'rating_cards': ratings.rating_cards(title),
+        'MEDIA': tmdb.IMG,
+    })
+
+
+@login_required
+def film_by_imdb(request, imdb_id):
+    """Страница фильма по IMDb-id (карточки «Популярное сейчас»).
+
+    IMDb отдаёт только свой id, поэтому сначала находим фильм в TMDB;
+    если не вышло — уводим в поиск на главной с этим названием.
+    """
+    found = tmdb.find_by_imdb(imdb_id)
+    if found:
+        return redirect('film_detail', found[0], found[1])
+    q = request.GET.get('q', '').strip()
+    return redirect(f"{reverse('home')}?q={quote(q)}" if q else reverse('home'))
+
+
+# --- правовые документы (публичные страницы, без входа) -----------------------
+
+# слаг документа -> (заголовок, шаблон). Меняется в одном месте,
+# ссылки в футере и в меню документов берутся отсюда же через urls.py
+LEGAL_PAGES = {
+    'agreement': ('Пользовательское соглашение', 'legal/agreement.html'),
+    'privacy': ('Политика обработки персональных данных', 'legal/privacy.html'),
+    'consent': ('Согласие на обработку персональных данных', 'legal/consent.html'),
+    'disclaimer': ('Правила сайта и отказ от ответственности', 'legal/disclaimer.html'),
+    'contacts': ('Контакты и сведения об операторе', 'legal/contacts.html'),
+}
+
+
+def legal_index(request):
+    """Хаб со списком всех правовых документов сайта."""
+    return render(request, 'legal/index.html', {
+        'pages': [{'slug': slug, 'title': title}
+                  for slug, (title, _) in LEGAL_PAGES.items()],
+    })
+
+
+def legal_page(request, page):
+    """Одна правовая страница (доступна без входа в систему)."""
+    item = LEGAL_PAGES.get(page)
+    if not item:
+        raise Http404
+    title, template = item
+    return render(request, template, {'doc_title': title,
+                                      'pages': [{'slug': slug, 'title': t}
+                                                for slug, (t, _) in LEGAL_PAGES.items()]})
 
 
 # --- просмотр ----------------------------------------------------------------
@@ -821,6 +1010,7 @@ def _path_for_stream(request, title, ep_pk=None):
 
 @login_required
 def stream(request, pk, ep_pk=None):
+    """Отдача видеофайла в плеер с поддержкой заголовка Range (перемотка)."""
     title = get_object_or_404(Title, pk=pk)
     path = _path_for_stream(request, title, ep_pk)
     if not path:
@@ -837,6 +1027,8 @@ def stream(request, pk, ep_pk=None):
     length = end - start + 1
 
     def chunks():
+        # чтение кусками по 1 МБ, чтобы браузер мог перематывать видео
+        # без загрузки всего файла целиком
         with open(path, 'rb') as f:
             f.seek(start)
             left = length
@@ -860,6 +1052,7 @@ def stream(request, pk, ep_pk=None):
 
 @login_required
 def library_page(request):
+    """Папки пользователя с фильмами: добавление/удаление папок (вкладка «Папки»)."""
     error = ''
     if request.method == 'POST':
         if request.POST.get('action') == 'remove':
@@ -881,6 +1074,7 @@ def library_page(request):
 
 @login_required
 def browse(request):
+    """Проводник браузера: список папок и видеофайлов для выбора фильма."""
     p = Path(request.GET.get('path') or Path.home()).expanduser()
     try:
         p = p.resolve()
@@ -927,6 +1121,7 @@ def _last_weeks(n):
 
 @login_required
 def profile(request):
+    """Профиль: статистика просмотров (часы, графики) и список статусов."""
     user = request.user
     sessions = (WatchSession.objects.filter(user=user)
                 .select_related('title').prefetch_related('title__genres'))
