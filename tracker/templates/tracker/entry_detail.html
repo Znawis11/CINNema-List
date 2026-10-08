@@ -22,10 +22,10 @@
   <div class="col-md-9">
     <div class="d-flex align-items-center gap-2 flex-wrap">
       <h2 class="mb-0">{{ title.name }}</h2>
-      <span class="badge {% if entry.status == 'watched' %}bg-success{% elif entry.status == 'watching' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+      <span class="badge {% if entry.status == 'watched' %}bg-success{% elif entry.status == 'watching' %}bg-info{% else %}bg-secondary{% endif %}">
         {{ entry.get_status_display }}
       </span>
-      {% if entry.rating %}<span class="badge bg-warning text-dark">⭐ {{ entry.rating }}/5</span>{% endif %}
+      {% if entry.rating %}<span class="badge bg-warning">⭐ {{ entry.rating }}/5</span>{% endif %}
     </div>
     <div class="text-muted mb-3">
       {% if title.year %}{{ title.year }} · {% endif %}
@@ -84,7 +84,7 @@
 
         <dt class="col-sm-4">Жанры</dt>
         <dd class="col-sm-8">
-          {% for g in title.genres.all %}<span class="badge bg-info text-dark">{{ g }}</span> {% empty %}—{% endfor %}
+          {% for g in title.genres.all %}<span class="badge bg-info">{{ g }}</span> {% empty %}—{% endfor %}
         </dd>
 
         {% if title.original_name %}
@@ -180,7 +180,7 @@
 
       <h6 class="mt-3">Жанры TMDB</h6>
       <div class="mb-1">
-        {% for g in title.genres.all %}<span class="badge bg-info text-dark">{{ g }}</span> {% empty %}
+        {% for g in title.genres.all %}<span class="badge bg-info">{{ g }}</span> {% empty %}
           <span class="text-muted small">Нет данных</span>
         {% endfor %}
       </div>
@@ -190,7 +190,7 @@
         {% csrf_token %}
         <input type="hidden" name="action" value="remove_tag">
         {% for t in entry.tags.all %}
-          <button class="badge bg-warning text-dark border-0" name="remove" value="{{ t.pk }}"
+          <button class="badge bg-warning border-0" name="remove" value="{{ t.pk }}"
                   title="Убрать тег">#{{ t.name }} ✕</button>
         {% empty %}
           <span class="text-muted small">Своих тегов пока нет.</span>
@@ -318,7 +318,8 @@
               <label class="form-check-label" for="loc-streaming">🌐 На стриминге — по ссылке</label>
             </div>
           </div>
-          <div class="mt-2">
+          <div class="mt-2" id="streamingUrlField"
+               {% if entry.location != 'streaming' %}style="display:none"{% endif %}>
             <input name="streaming_url" class="form-control" style="max-width:560px"
                    value="{{ entry.streaming_url }}"
                    placeholder="https://... — страница фильма на стриминге">
@@ -349,4 +350,14 @@
     {% endif %}
   </div>
 </div>
+<script>
+  (function () {
+    const field = document.getElementById('streamingUrlField');
+    if (!field) return;
+    const radios = document.querySelectorAll('input[name="location"]');
+    radios.forEach(r => r.addEventListener('change', function () {
+      field.style.display = this.value === 'streaming' ? '' : 'none';
+    }));
+  })();
+</script>
 {% endblock %}

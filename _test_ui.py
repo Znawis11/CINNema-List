@@ -159,21 +159,34 @@ r = c.get('/collection/', {'location': 'streaming'}, **hx)
 check('фильтр по метке', 'Матрица' in r.content.decode())
 c.post(f'/entry/{e.pk}/location/', {'action': 'x', 'location': 'local'})
 
-# --- подборки
-c.post('/collections/', {'action': 'create', 'name': 'Проверочная'})
+# --- подборки (внутри коллекции)
+r = c.post('/collection/', {'action': 'create', 'name': 'Проверочная'})
+check('подборка создана', r.status_code == 302 and 'collection=' in r.get('Location', ''),
+      f"{r.status_code} {r.get('Location', '')}")
 coll = Collection.objects.filter(user__username='uitest', name='Проверочная').first()
-check('подборка создана', coll is not None)
+check('подборка в БД', coll is not None)
 if coll:
-    r = c.get('/collections/')
-    check('страница подборок', r.status_code == 200, r.status_code)
-    c.post(f'/collections/{coll.pk}/', {'action': 'add', 'entries': [str(e.pk)]})
-    r = c.get(f'/collections/{coll.pk}/')
-    check('страница подборки', r.status_code == 200 and 'Матрица' in r.content.decode())
+    r = c.post('/collection/', {'action': 'add', 'collection': str(coll.pk),
+                               'entries': [str(e.pk)]})
+    check('добавление в подборку', r.status_code == 302, r.status_code)
     r = c.get('/collection/', {'collection': str(coll.pk)}, **hx)
     check('фильтр по подборке', 'Матрица' in r.content.decode())
-    c.post(f'/collections/{coll.pk}/', {'action': 'remove', 'entry': str(e.pk)})
-    c.post(f'/collections/{coll.pk}/', {'action': 'delete'})
-    check('подборка удалена', not Collection.objects.filter(pk=coll.pk).exists())
+    r = c.get('/collection/', {'collection': str(coll.pk)})
+    check('кнопка удаления на карточке', 'Убрать' in r.content.decode() or '✕' in r.content.decode())
+    r = c.post('/collection/', {'action': 'remove', 'collection': str(coll.pk),
+                               'entry': str(e.pk)})
+    check('удаление из подборки', r.status_code == 302, r.status_code)
+    coll.refresh_from_db()
+    check('фильм убран', e.pk not in coll.entries.values_list('pk', flat=True))
+    r = c.post('/collection/', {'action': 'rename', 'collection': str(coll.pk),
+                               'name': 'Переименованная'})
+    check('переименование', r.status_code == 302, r.status_code)
+    coll.refresh_from_db()
+    check('имя изменено', coll.name == 'Переименованная', coll.name)
+    r = c.post('/collection/', {'action': 'delete', 'collection': str(coll.pk)})
+    check('подборка удалена', r.status_code == 302 and r.url == '/collection/',
+          f"{r.status_code} {r.get('Location', '')}")
+    check('подборки нет в БД', not Collection.objects.filter(pk=coll.pk).exists())
 
 print()
 print('Итого:', sum(1 for _, c_, _ in ok if c_), '/', len(ok), 'успешно')

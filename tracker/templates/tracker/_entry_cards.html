@@ -1,30 +1,43 @@
 <div class="row">
 {% for e in entries %}
   <div class="col-6 col-md-4 col-xl-2 mb-3">
-    <a href="{% url 'entry_detail' e.pk %}" class="card h-100 hover-card text-decoration-none text-dark">
-      {% if e.title.poster_url %}
-        <img src="{{ e.title.poster_url }}" class="poster rounded-bottom-0" alt="{{ e.title.name }}" loading="lazy">
-      {% else %}
-        <div class="poster-ph rounded-bottom-0">Нет постера</div>
+    <div class="card h-100 hover-card position-relative">
+      <a href="{% url 'entry_detail' e.pk %}" class="text-decoration-none text-dark">
+        {% if e.title.poster_url %}
+          <img src="{{ e.title.poster_url }}" class="poster rounded-bottom-0" alt="{{ e.title.name }}" loading="lazy">
+        {% else %}
+          <div class="poster-ph rounded-bottom-0">Нет постера</div>
+        {% endif %}
+        <div class="card-body p-2">
+          <div class="fw-semibold text-truncate" title="{{ e.title.name }}">{{ e.title.name }}</div>
+          <div class="small text-muted mb-1">
+            {% if e.title.year %}{{ e.title.year }} · {% endif %}{{ e.title.director|truncatechars:25 }}
+          </div>
+          <div class="d-flex flex-wrap gap-1">
+            <span class="badge {% if e.status == 'watched' %}bg-success{% elif e.status == 'watching' %}bg-info{% else %}bg-secondary{% endif %}">{{ e.get_status_display }}</span>
+            {% if e.site_score %}<span class="badge bg-dark">★ {{ e.site_score }}</span>{% endif %}
+            {% if e.rating %}<span class="badge bg-warning">⭐ {{ e.rating }}/5</span>{% endif %}
+            {% if e.location == 'streaming' %}<span class="badge bg-primary" title="Фильм на стриминге">🌐 Стриминг</span>{% else %}<span class="badge bg-secondary" title="Файл на вашем ПК">💻 Локально</span>{% endif %}
+            {% if e.review %}<span class="badge bg-light text-dark border" title="Есть своя рецензия">📝</span>{% endif %}
+          </div>
+          <div class="d-flex flex-wrap gap-1 mt-1">
+            {% for g in e.title.genres.all|slice:':3' %}<span class="badge bg-light text-dark border">{{ g }}</span>{% endfor %}
+            {% for t in e.tags.all|slice:':2' %}<span class="badge bg-warning-subtle text-dark-emphasis">#{{ t }}</span>{% endfor %}
+          </div>
+        </div>
+      </a>
+      {% if active_collection %}
+        <form method="post" action="{% url 'entry_list' %}"
+              style="position:absolute;top:4px;right:4px"
+              onsubmit="return confirm('Убрать «{{ e.title.name }}» из подборки «{{ active_collection.name }}»?')">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove">
+          <input type="hidden" name="entry" value="{{ e.pk }}">
+          <input type="hidden" name="collection" value="{{ active_collection.pk }}">
+          <button type="submit" class="btn btn-sm btn-danger" title="Убрать из подборки">✕</button>
+        </form>
       {% endif %}
-      <div class="card-body p-2">
-        <div class="fw-semibold text-truncate" title="{{ e.title.name }}">{{ e.title.name }}</div>
-        <div class="small text-muted mb-1">
-          {% if e.title.year %}{{ e.title.year }} · {% endif %}{{ e.title.director|truncatechars:25 }}
-        </div>
-        <div class="d-flex flex-wrap gap-1">
-          <span class="badge {% if e.status == 'watched' %}bg-success{% elif e.status == 'watching' %}bg-info text-dark{% else %}bg-secondary{% endif %}">{{ e.get_status_display }}</span>
-          {% if e.site_score %}<span class="badge bg-dark">★ {{ e.site_score }}</span>{% endif %}
-          {% if e.rating %}<span class="badge bg-warning text-dark">⭐ {{ e.rating }}/5</span>{% endif %}
-          {% if e.location == 'streaming' %}<span class="badge bg-primary" title="Фильм на стриминге">🌐 Стриминг</span>{% else %}<span class="badge bg-secondary" title="Файл на вашем ПК">💻 Локально</span>{% endif %}
-          {% if e.review %}<span class="badge bg-light text-dark border" title="Есть своя рецензия">📝</span>{% endif %}
-        </div>
-        <div class="d-flex flex-wrap gap-1 mt-1">
-          {% for g in e.title.genres.all|slice:':3' %}<span class="badge bg-light text-dark border">{{ g }}</span>{% endfor %}
-          {% for t in e.tags.all|slice:':2' %}<span class="badge bg-warning-subtle text-dark-emphasis">#{{ t }}</span>{% endfor %}
-        </div>
-      </div>
-    </a>
+    </div>
   </div>
 {% empty %}
   <p class="text-muted">Ничего не найдено. Попробуйте изменить поиск или фильтры.</p>

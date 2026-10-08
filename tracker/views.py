@@ -102,8 +102,52 @@ def register(request):
     return render(request, 'registration/register.html', {'form': form})
 
 
+def _collection_action(request):
+    """CRUD подборок из страницы коллекции (POST)."""
+    action = request.POST.get('action')
+    name = (request.POST.get('name') or '').strip()[:100]
+    coll_id = request.POST.get('collection') or request.POST.get('id')
+
+    if action == 'create':
+        if name:
+            coll = Collection.objects.create(user=request.user, name=name)
+            messages.success(request, f'Подборка «{name}» создана.')
+            return redirect(f"{reverse('entry_list')}?collection={coll.pk}")
+        messages.warning(request, 'Назовите подборку.')
+        return redirect('entry_list')
+
+    coll = Collection.objects.filter(pk=coll_id, user=request.user).first()
+    if not coll:
+        return redirect('entry_list')
+
+    if action == 'rename':
+        if name:
+            coll.name = name
+            coll.save(update_fields=['name'])
+    elif action == 'delete':
+        cname = coll.name
+        coll.delete()
+        messages.success(request, f'Подборка «{cname}» удалена.')
+        return redirect('entry_list')
+    elif action == 'add':
+        ids = request.POST.getlist('entries')
+        entries = list(Entry.objects.filter(pk__in=ids, user=request.user))
+        if entries:
+            coll.entries.add(*entries)
+            messages.success(request, f'В подборку добавлено: {len(entries)}.')
+    elif action == 'remove':
+        entry = coll.entries.filter(pk=request.POST.get('entry')).first()
+        if entry:
+            coll.entries.remove(entry)
+
+    return redirect(f"{reverse('entry_list')}?collection={coll.pk}")
+
+
 @login_required
 def entry_list(request):
+    if request.method == 'POST':
+        return _collection_action(request)
+
     entries = (Entry.objects.filter(user=request.user)
                .select_related('title')
                .prefetch_related('title__genres', 'tags'))
@@ -169,12 +213,18 @@ def entry_list(request):
 
     # подборка
     collection = request.GET.get('collection', '')
+    active_collection = None
+    other_entries = []
     if collection.isdigit():
-        coll = (Collection.objects.filter(pk=collection, user=request.user)
-                .annotate(n=Count('entries')).first())
-        if coll:
-            ids = set(coll.entries.values_list('pk', flat=True))
+        active_collection = Collection.objects.filter(
+            pk=collection, user=request.user).first()
+        if active_collection:
+            ids = set(active_collection.entries.values_list('pk', flat=True))
             entries = [e for e in entries if e.pk in ids]
+            other_entries = (Entry.objects.filter(user=request.user)
+                             .exclude(pk__in=ids)
+                             .select_related('title')
+                             .order_by('title__name'))
         else:
             entries = []
 
@@ -202,6 +252,8 @@ def entry_list(request):
            'collections': Collection.objects.filter(user=request.user)
                                             .annotate(n=Count('entries'))
                                             .order_by('name'),
+           'active_collection': active_collection,
+           'other_entries': other_entries,
            'all_genres': Genre.objects.all().order_by('name'),
            'all_tags': Tag.objects.filter(user=request.user).order_by('name'),
            'active_filters': len([1 for v in (q, status, dur, title_type,
@@ -466,84 +518,6 @@ def entry_episodes(request, pk):
     if request.headers.get('X-Fetch'):  # авто-отметка из плеера
         return JsonResponse({'ok': True})
     return redirect(back)
-
-
-# --- подборки фильмов (внутри коллекции) --------------------------------------
-
-@login_required
-def collections_page(request):
-    if request.method == 'POST':
-        action = request.POST.get('action')
-        name = (request.POST.get('name') or '').strip()[:100]
-        if action == 'create':
-            if name:
-                Collection.objects.create(user=request.user, name=name)
-                messages.success(request, f'Подборка «{name}» создана.')
-            else:
-                messages.warning(request, 'Назовите подборку.')
-        elif action == 'rename':
-            coll = Collection.objects.filter(pk=request.POST.get('id'),
-                                             user=request.user).first()
-            if coll and name:
-                coll.name = name
-                coll.save(update_fields=['name'])
-        elif action == 'delete':
-            coll = Collection.objects.filter(pk=request.POST.get('id'),
-                                             user=request.user).first()
-            if coll:
-                cname = coll.name
-                coll.delete()
-                messages.success(request, f'Подборка «{cname}» удалена.')
-        return redirect('collections_page')
-
-    collections = (Collection.objects.filter(user=request.user)
-                   .annotate(n=Count('entries')).order_by('name'))
-    return render(request, 'tracker/collections.html',
-                  {'collections': collections})
-
-
-@login_required
-def collection_detail(request, pk):
-    collection = get_object_or_404(Collection, pk=pk, user=request.user)
-
-    if request.method == 'POST':
-        action = request.POST.get('action')
-        if action == 'add':
-            ids = request.POST.getlist('entries')
-            entries = list(Entry.objects.filter(pk__in=ids, user=request.user))
-            if entries:
-                collection.entries.add(*entries)
-                messages.success(request,
-                                 f'В подборку добавлено: {len(entries)}.')
-        elif action == 'remove':
-            entry = collection.entries.filter(
-                pk=request.POST.get('entry')).first()
-            if entry:
-                collection.entries.remove(entry)
-        elif action == 'rename':
-            name = (request.POST.get('name') or '').strip()[:100]
-            if name:
-                collection.name = name
-                collection.save(update_fields=['name'])
-        elif action == 'delete':
-            cname = collection.name
-            collection.delete()
-            messages.success(request, f'Подборка «{cname}» удалена.')
-            return redirect('collections_page')
-        return redirect('collection_detail', pk=collection.pk)
-
-    entries = _with_scores(list(
-        collection.entries.select_related('title')
-        .prefetch_related('title__genres', 'tags')))
-    entries.sort(key=lambda e: e.title.name.lower())
-    other = (Entry.objects.filter(user=request.user)
-             .exclude(pk__in=[e.pk for e in entries])
-             .select_related('title').order_by('title__name'))
-    return render(request, 'tracker/collection_detail.html', {
-        'collection': collection, 'entries': entries,
-        'other_entries': other[:300],
-        'statuses': Entry.STATUSES, 'locations': Entry.LOCATIONS,
-    })
 
 
 # --- выбор видеофайла: системный диалог + проводник ---------------------------

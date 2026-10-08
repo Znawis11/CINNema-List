@@ -30,7 +30,7 @@
   <div class="col-6 col-lg-3">
     <div class="card h-100">
       <div class="card-body">
-        <div class="display-6">{{ stats.hours_now }}<span class="fs-5 text-muted"> ч</span></div>
+        <div class="display-6" style="color:var(--accent3)">{{ stats.hours_now }}<span class="fs-5 text-muted"> ч</span></div>
         <div class="text-muted small">просмотрено в этом месяце</div>
       </div>
     </div>
@@ -38,7 +38,7 @@
   <div class="col-6 col-lg-3">
     <div class="card h-100">
       <div class="card-body">
-        <div class="display-6">{{ stats.hours_avg }}<span class="fs-5 text-muted"> ч</span></div>
+        <div class="display-6" style="color:var(--accent3)">{{ stats.hours_avg }}<span class="fs-5 text-muted"> ч</span></div>
         <div class="text-muted small">в среднем в месяц (8 мес.)</div>
       </div>
     </div>
@@ -46,7 +46,7 @@
   <div class="col-6 col-lg-3">
     <div class="card h-100">
       <div class="card-body">
-        <div class="display-6">{{ stats.episodes_now }}</div>
+        <div class="display-6" style="color:var(--accent3)">{{ stats.episodes_now }}</div>
         <div class="text-muted small">серий на этой неделе</div>
       </div>
     </div>
@@ -54,7 +54,7 @@
   <div class="col-6 col-lg-3">
     <div class="card h-100">
       <div class="card-body">
-        <div class="display-6">{{ stats.unfinished }}</div>
+        <div class="display-6" style="color:var(--accent3)">{{ stats.unfinished }}</div>
         <div class="text-muted small">недосмотрено</div>
       </div>
     </div>
@@ -166,15 +166,19 @@
 {{ weeks|json_script:"weeks-data" }}
 <script>
   const read = id => JSON.parse(document.getElementById(id).textContent);
-  Chart.defaults.color = '#6c757d';
-  Chart.defaults.font.family = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+  Chart.defaults.color = '#9d94c4';
+  Chart.defaults.font.family = "'Nunito', system-ui, sans-serif";
+  Chart.defaults.font.weight = '700';
 
   const hours = read('hours-data');
   new Chart(document.getElementById('hoursChart'), {
     type: 'bar',
     data: { labels: hours.labels,
             datasets: [{ label: 'часы', data: hours.values,
-                         backgroundColor: '#0d6efd' }] },
+                         backgroundColor: 'rgba(139,92,246,.7)',
+                         borderColor: '#8b5cf6',
+                         borderWidth: 2,
+                         borderRadius: 8 }] },
     options: { plugins: { legend: { display: false } },
                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   });
@@ -185,7 +189,10 @@
       type: 'bar',
       data: { labels: genres.labels,
               datasets: [{ label: genres.unit, data: genres.values,
-                           backgroundColor: '#ffc107' }] },
+                           backgroundColor: 'rgba(99,102,241,.7)',
+                           borderColor: '#6366f1',
+                           borderWidth: 2,
+                           borderRadius: 8 }] },
       options: { indexAxis: 'y',
                  plugins: { legend: { display: false } },
                  scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
@@ -198,7 +205,9 @@
       type: 'doughnut',
       data: { labels: types.labels,
               datasets: [{ data: types.values,
-                           backgroundColor: ['#0d6efd', '#198754', '#6f42c1', '#dc3545', '#fd7e14'] }] },
+                           backgroundColor: ['#8b5cf6', '#6366f1', '#a78bfa', '#818cf8', '#c084fc'],
+                           borderColor: '#1c1535',
+                           borderWidth: 3 }] },
       options: { plugins: { legend: { position: 'bottom' } } }
     });
   }
@@ -208,7 +217,10 @@
     type: 'bar',
     data: { labels: weeks.labels,
             datasets: [{ label: 'серий', data: weeks.values,
-                         backgroundColor: '#198754' }] },
+                         backgroundColor: 'rgba(167,139,250,.7)',
+                         borderColor: '#a78bfa',
+                         borderWidth: 2,
+                         borderRadius: 8 }] },
     options: { plugins: { legend: { display: false } },
                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   });

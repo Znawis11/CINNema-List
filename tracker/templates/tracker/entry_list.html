@@ -4,10 +4,7 @@
   <h2 class="mb-0">Моя коллекция
     <span class="badge bg-secondary fs-6">{{ entries|length }}</span>
   </h2>
-  <div class="d-flex gap-2 flex-wrap">
-    <a href="{% url 'collections_page' %}" class="btn btn-outline-primary">🗂 Подборки</a>
-    <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
-  </div>
+  <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
 </div>
 
 {# --- Поиск и фильтры (обновляются через htmx) --- #}
@@ -18,6 +15,9 @@
                   change from:#filters input[type=checkbox]"
       hx-target="#results"
       hx-include="#filters">
+  {% if active_collection %}
+    <input type="hidden" name="collection" value="{{ active_collection.pk }}">
+  {% endif %}
   <div class="row g-2">
     <div class="col-lg-5">
       <input id="q" name="q" value="{{ q }}" class="form-control"
@@ -44,7 +44,7 @@
         ⚙ Фильтры
         {% if active_filters %}<span class="badge bg-primary">{{ active_filters }}</span>{% endif %}
       </button>
-      <a href="{% url 'entry_list' %}" class="btn btn-link text-decoration-none">Сброс</a>
+      <a href="{% url 'entry_list' %}{% if active_collection %}?collection={{ active_collection.pk }}{% endif %}" class="btn btn-link text-decoration-none">Сброс</a>
     </div>
   </div>
 
@@ -135,22 +135,109 @@
             {% endfor %}
           </select>
         </div>
-
-        <div class="col-6 col-lg-3">
-          <div class="fw-semibold mb-1">Подборка</div>
-          <select name="collection" class="form-select form-select-sm">
-            <option value="">Все фильмы</option>
-            {% for c in collections %}
-              <option value="{{ c.pk }}" {% if collection == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.name }} ({{ c.n }})</option>
-            {% endfor %}
-          </select>
-        </div>
       </div>
     </div>
   </div>
 </form>
 
-<div id="results">
-  {% include 'tracker/_entry_cards.html' %}
+<div class="row">
+  {# --- Сайдбар с подборками --- #}
+  <div class="col-lg-3 mb-3">
+    <div class="card sticky-top" style="top: 1rem; z-index: 100;">
+      <div class="card-header fw-semibold">Мои подборки</div>
+      <div class="card-body">
+        <form method="post" class="d-flex gap-1 mb-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create">
+          <input name="name" class="form-control form-control-sm" maxlength="100"
+                 placeholder="Новая подборка" required>
+          <button class="btn btn-sm btn-success text-nowrap">+ Создать</button>
+        </form>
+        <div class="d-flex flex-column gap-1">
+          <a href="{% url 'entry_list' %}"
+             class="btn btn-sm {% if not active_collection %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+            Все фильмы
+          </a>
+          {% for c in collections %}
+            <div class="d-flex gap-1 align-items-center">
+              <a href="{% url 'entry_list' %}?collection={{ c.pk }}"
+                 class="btn btn-sm flex-fill text-truncate {% if active_collection and active_collection.pk == c.pk %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                 title="{{ c.name }}">
+                {{ c.name }} ({{ c.n }})
+              </a>
+              <form method="post" class="d-flex gap-1 m-0">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="rename">
+                <input type="hidden" name="id" value="{{ c.pk }}">
+                <input type="hidden" name="collection" value="{{ active_collection.pk|default:'' }}">
+                <input name="name" class="form-control form-control-sm" style="width:80px"
+                       value="{{ c.name }}" maxlength="100" aria-label="Переименовать">
+                <button class="btn btn-sm btn-outline-primary" title="Переименовать">💾</button>
+              </form>
+              <form method="post" class="m-0"
+                    onsubmit="return confirm('Удалить подборку «{{ c.name }}»? Фильмы останутся в коллекции.')">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" value="{{ c.pk }}">
+                <input type="hidden" name="collection" value="{{ active_collection.pk|default:'' }}">
+                <button class="btn btn-sm btn-outline-danger" title="Удалить">🗑</button>
+              </form>
+            </div>
+          {% empty %}
+            <span class="text-muted small">Подборок пока нет — создайте первую выше.</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# --- Результаты --- #}
+  <div class="col-lg-9">
+    {% if active_collection %}
+      <div class="alert alert-info py-2 d-flex justify-content-between align-items-center">
+        <span>Показаны фильмы из подборки <strong>«{{ active_collection.name }}»</strong></span>
+        <a href="{% url 'entry_list' %}" class="btn btn-sm btn-outline-secondary">Показать все</a>
+      </div>
+    {% endif %}
+    <div id="results">
+      {% include 'tracker/_entry_cards.html' %}
+    </div>
+
+    {% if active_collection and other_entries %}
+      <section class="card card-body mt-3">
+        <h5 class="mb-2">Добавить фильмы в подборку</h5>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add">
+          <input type="hidden" name="collection" value="{{ active_collection.pk }}">
+          <div class="row g-2">
+            <div class="col-lg-4">
+              <input id="pickFilter" class="form-control" placeholder="Фильтр по названию...">
+            </div>
+            <div class="col-lg-6">
+              <select name="entries" id="pickEntries" multiple size="8"
+                      class="form-select" style="min-height:180px">
+                {% for e in other_entries %}
+                  <option value="{{ e.pk }}">{{ e.title.name }}{% if e.title.year %} ({{ e.title.year }}){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-lg-2 d-grid">
+              <button class="btn btn-success">→ Добавить</button>
+            </div>
+          </div>
+          <div class="form-text">Выберите несколько фильмов, зажав Ctrl (Cmd на Mac).</div>
+        </form>
+      </section>
+      <script>
+        document.getElementById('pickFilter').addEventListener('input', function () {
+          const q = this.value.toLowerCase();
+          for (const o of document.getElementById('pickEntries').options) {
+            o.hidden = !!q && !o.textContent.toLowerCase().includes(q);
+          }
+        });
+      </script>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

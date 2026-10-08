@@ -7,55 +7,165 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    body { min-height: 100vh; }
-    .navbar .nav-link:hover { color: #ffc107; }
+    :root {
+      --bg: #0d0a1a;
+      --bg2: #151029;
+      --card: #1c1535;
+      --card2: #241b45;
+      --border: #352a5e;
+      --text: #e8e4f8;
+      --muted: #9d94c4;
+      --accent: #8b5cf6;
+      --accent2: #6366f1;
+      --accent3: #a78bfa;
+      --pink: #c084fc;
+      --grad: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+      --grad2: linear-gradient(135deg, #a78bfa 0%, #818cf8 100%);
+    }
+    * { font-family: 'Nunito', system-ui, sans-serif; }
+    body { min-height: 100vh; background: var(--bg); color: var(--text); }
 
-    /* постеры */
-    .poster { aspect-ratio: 2 / 3; object-fit: cover; width: 100%;
-              background: #212529; border-radius: .25rem; }
-    .poster-ph { aspect-ratio: 2 / 3; width: 100%; background: #343a40;
-                 border-radius: .25rem; display: flex; align-items: center;
-                 justify-content: center; color: #6c757d; font-size: .8rem; }
+    /* навигация */
+    .navbar { background: var(--bg2) !important; border-bottom: 2px solid var(--border); }
+    .navbar .nav-link { color: var(--muted) !important; font-weight: 700; border-radius: 999px; padding: .35rem .9rem !important; margin: 0 .15rem; transition: all .15s; }
+    .navbar .nav-link:hover { color: var(--text) !important; background: var(--card2); }
+    .navbar .nav-link.active { color: #fff !important; background: var(--grad); }
+    .navbar-brand { color: #fff !important; font-weight: 900; font-size: 1.3rem; }
+    .navbar-username { color: var(--text); }
+    a:hover .navbar-username { color: var(--accent3); }
 
     /* карточки */
-    .card { transition: transform .12s ease, box-shadow .12s ease; }
-    .hover-card:hover { transform: translateY(-3px);
-                        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; color: var(--text); transition: transform .15s ease, box-shadow .15s ease, border-color .15s; }
+    .card:hover { border-color: var(--accent); }
+    .hover-card:hover { transform: translateY(-4px); box-shadow: 0 .75rem 2rem rgba(139,92,246,.25) !important; border-color: var(--accent); }
+    .card-header { background: var(--card2); border-bottom: 1px solid var(--border); font-weight: 800; }
+    .card-footer { background: var(--card2); border-top: 1px solid var(--border); }
 
-    /* строка «Популярное сейчас» */
-    .popular-row { display: flex; gap: .8rem; overflow-x: auto;
-                   padding: .25rem .25rem 1rem; scroll-snap-type: x proximity; }
-    .popular-row .pop-card { flex: 0 0 138px; scroll-snap-align: start; text-decoration: none; }
-    .popular-row::-webkit-scrollbar { height: 8px; }
-    .popular-row::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 4px; }
+    /* постеры */
+    .poster { aspect-ratio: 2 / 3; object-fit: cover; width: 100%; background: var(--card2); border-radius: .75rem .75rem 0 0; }
+    .poster-ph { aspect-ratio: 2 / 3; width: 100%; background: var(--card2); border-radius: .75rem .75rem 0 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: .8rem; }
+
+    /* кнопки */
+    .btn { border-radius: 999px; font-weight: 700; }
+    .btn-primary { background: var(--grad); border: none; color: #fff; }
+    .btn-primary:hover, .btn-primary:focus { background: var(--grad2); color: #fff; box-shadow: 0 0 1rem rgba(139,92,246,.4); }
+    .btn-success { background: linear-gradient(135deg, #34d399, #10b981); border: none; color: #06281c; }
+    .btn-success:hover { background: linear-gradient(135deg, #6ee7b7, #34d399); color: #06281c; }
+    .btn-danger { background: linear-gradient(135deg, #f87171, #ef4444); border: none; color: #fff; }
+    .btn-danger:hover { background: linear-gradient(135deg, #fca5a5, #f87171); color: #fff; }
+    .btn-warning { background: linear-gradient(135deg, #fbbf24, #f59e0b); border: none; color: #451a03; }
+    .btn-outline-primary { color: var(--accent3); border-color: var(--accent); }
+    .btn-outline-primary:hover { background: var(--grad); border-color: var(--accent); color: #fff; }
+    .btn-outline-secondary { color: var(--muted); border-color: var(--border); }
+    .btn-outline-secondary:hover { background: var(--card2); border-color: var(--accent); color: var(--text); }
+    .btn-outline-danger { color: #f87171; border-color: #7f1d1d; }
+    .btn-outline-danger:hover { background: #7f1d1d; border-color: #ef4444; color: #fff; }
+    .btn-outline-warning { color: #fbbf24; border-color: #92400e; }
+    .btn-outline-warning:hover { background: #92400e; color: #fbbf24; }
+    .btn-dark { background: var(--card2); border-color: var(--border); color: var(--text); }
+    .btn-dark:hover { background: var(--border); color: #fff; }
+    .btn-link { color: var(--accent3); }
+    .btn-link:hover { color: var(--pink); }
+
+    /* формы */
+    .form-control, .form-select { background: var(--bg2); border: 1px solid var(--border); color: var(--text); border-radius: .75rem; }
+    .form-control:focus, .form-select:focus { background: var(--bg2); border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 .2rem rgba(139,92,246,.25); }
+    .form-control::placeholder { color: var(--muted); }
+    .form-check-input { background-color: var(--bg2); border-color: var(--border); }
+    .form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+    .form-check-input:focus { box-shadow: 0 0 0 .2rem rgba(139,92,246,.25); border-color: var(--accent); }
+    .form-label { color: var(--muted); font-weight: 600; }
+    .form-text { color: var(--muted); }
+
+    /* бейджи */
+    .badge { border-radius: 999px; font-weight: 700; }
+    .bg-primary { background: var(--grad) !important; }
+    .bg-secondary { background: var(--card2) !important; color: var(--muted) !important; }
+    .bg-success { background: linear-gradient(135deg, #34d399, #10b981) !important; color: #06281c !important; }
+    .bg-info { background: linear-gradient(135deg, #60a5fa, #3b82f6) !important; color: #fff !important; }
+    .bg-warning { background: linear-gradient(135deg, #fbbf24, #f59e0b) !important; color: #451a03 !important; }
+    .bg-danger { background: linear-gradient(135deg, #f87171, #ef4444) !important; color: #fff !important; }
+    .bg-dark { background: var(--card2) !important; }
+    .bg-light { background: var(--card2) !important; color: var(--text) !important; }
+    .bg-warning-subtle { background: rgba(251,191,36,.15) !important; color: #fbbf24 !important; }
+    .bg-dark-subtle { background: rgba(139,92,246,.15) !important; color: var(--accent3) !important; }
+
+    /* текст */
+    .text-muted { color: var(--muted) !important; }
+    a { color: var(--accent3); }
+    a:hover { color: var(--pink); }
+    h1, h2, h3, h4, h5, h6 { font-weight: 800; }
+
+    /* таблицы и списки */
+    .list-group { --bs-list-group-bg: var(--card); --bs-list-group-color: var(--text); --bs-list-group-border-color: var(--border); }
+    .list-group-item { background: var(--card); color: var(--text); border-color: var(--border); }
+    .list-group-item-action:hover, .list-group-item-action:focus { background: var(--card2); color: var(--text); }
+    .list-group-item-action.active { background: var(--grad); border-color: var(--accent); color: #fff; }
+
+    /* вкладки */
+    .nav-tabs { border-bottom: 2px solid var(--border); }
+    .nav-tabs .nav-link { color: var(--muted); border: none; border-bottom: 3px solid transparent; border-radius: .75rem .75rem 0 0; font-weight: 700; }
+    .nav-tabs .nav-link:hover { color: var(--text); border-bottom-color: var(--accent); }
+    .nav-tabs .nav-link.active { color: #fff; background: var(--grad); border-bottom-color: transparent; }
 
     /* чипы-фильтры */
     .filter-chip input { position: absolute; opacity: 0; }
-    .filter-chip span { display: inline-block; padding: .25rem .7rem; font-size: .85rem;
-                        border: 1px solid #ced4da; border-radius: 999px;
-                        background: #fff; cursor: pointer; user-select: none; }
-    .filter-chip input:checked + span { background: #0d6efd; border-color: #0d6efd; color: #fff; }
-    .filter-chip input:focus + span { box-shadow: 0 0 0 .2rem rgba(13,110,253,.25); }
+    .filter-chip span { display: inline-block; padding: .3rem .8rem; font-size: .85rem; font-weight: 700; border: 2px solid var(--border); border-radius: 999px; background: var(--card); cursor: pointer; user-select: none; transition: all .15s; color: var(--muted); }
+    .filter-chip span:hover { border-color: var(--accent); color: var(--text); }
+    .filter-chip input:checked + span { background: var(--grad); border-color: var(--accent); color: #fff; box-shadow: 0 0 .75rem rgba(139,92,246,.35); }
+    .filter-chip input:focus + span { box-shadow: 0 0 0 .2rem rgba(139,92,246,.25); }
 
     /* карточки рейтингов */
-    .rating-card .value { font-size: 1.4rem; font-weight: 600; line-height: 1.2; }
+    .rating-card .value { font-size: 1.4rem; font-weight: 800; line-height: 1.2; }
     .rating-card .label { font-size: .78rem; opacity: .85; }
 
     /* аватар (первая буква имени) */
-    .avatar-circle { width: 32px; height: 32px; border-radius: 50%;
-                     background: #0d6efd; color: #fff; font-weight: 600;
-                     display: inline-flex; align-items: center;
-                     justify-content: center; flex: 0 0 auto; }
+    .avatar-circle { width: 32px; height: 32px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; box-shadow: 0 0 .75rem rgba(139,92,246,.4); }
     .avatar-lg { width: 72px; height: 72px; font-size: 1.8rem; }
-    .navbar-username { color: #fff; }
-    a:hover .navbar-username { color: #ffc107; }
+
+    /* строка «Популярное сейчас» */
+    .popular-row { display: flex; gap: .8rem; overflow-x: auto; padding: .25rem .25rem 1rem; scroll-snap-type: x proximity; }
+    .popular-row .pop-card { flex: 0 0 138px; scroll-snap-align: start; text-decoration: none; }
+    .popular-row::-webkit-scrollbar { height: 8px; }
+    .popular-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* прогресс */
+    .progress { background: var(--bg2); border-radius: 999px; }
+    .progress-bar { background: var(--grad); border-radius: 999px; }
+
+    /* хлебные крошки */
+    .breadcrumb { --bs-breadcrumb-divider-color: var(--muted); }
+    .breadcrumb-item a { color: var(--accent3); text-decoration: none; }
+    .breadcrumb-item.active { color: var(--muted); }
+
+    /* алерты */
+    .alert { border-radius: 1rem; border: 1px solid var(--border); }
+    .alert-info { background: rgba(99,102,241,.12); border-color: var(--accent2); color: #c7d2fe; }
+    .alert-warning { background: rgba(251,191,36,.1); border-color: #92400e; color: #fde68a; }
+    .alert-danger { background: rgba(239,68,68,.1); border-color: #7f1d1d; color: #fca5a5; }
+    .alert-success { background: rgba(16,185,129,.1); border-color: #065f46; color: #6ee7b7; }
+    .alert-secondary { background: var(--card2); border-color: var(--border); color: var(--muted); }
+
+    /* видео */
+    video { border-radius: 1rem; }
+
+    /* разделители */
+    hr { border-color: var(--border); }
+
+    /* скроллбар */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
   </style>
 </head>
-<body class="bg-light">
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+<body>
+<nav class="navbar navbar-expand-lg mb-4">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="{% url 'home' %}">🎬 CINNemaList</a>
+    <a class="navbar-brand" href="{% url 'home' %}">🎬 CINNemaList</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
             data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false"
             aria-label="Меню">
@@ -66,7 +176,6 @@
         <ul class="navbar-nav me-auto">
           <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'home' %}">Главная</a></li>
           <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name in 'entry_list entry_create entry_detail entry_update entry_delete' %}active{% endif %}" href="{% url 'entry_list' %}">Коллекция</a></li>
-          <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name in 'collections_page collection_detail' %}active{% endif %}" href="{% url 'collections_page' %}">Подборки</a></li>
         </ul>
         <div class="d-flex align-items-center gap-3">
           <a href="{% url 'profile' %}" class="d-flex align-items-center gap-2 text-decoration-none"
