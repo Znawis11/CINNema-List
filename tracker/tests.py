@@ -189,3 +189,114 @@ class FilmPageTest(TestCase):
 
     def test_unknown_media_type_is_404(self):
         self.assertEqual(self.client.get('/film/person/278/').status_code, 404)
+
+
+class SecurityTest(TestCase):
+    """Доступ к файловой системе сервера: только для администраторов."""
+
+    def setUp(self):
+        self.user = _register(self.client, 'ordinary')
+        self.admin = User.objects.create_user('admin1', password='adm1nPass!',
+                                              is_staff=True)
+        self.title = Title.objects.create(name='Фильм', year=2021)
+        self.entry = Entry.objects.create(user=self.user, title=self.title)
+
+    def test_browse_hidden_from_regular_user(self):
+        """Обычный пользователь не видит структуру папок сервера."""
+        self.assertEqual(self.client.get(reverse('browse')).status_code, 404)
+
+    def test_browse_open_for_staff(self):
+        self.client.logout()
+        self.client.login(username='admin1', password='adm1nPass!')
+        self.assertEqual(self.client.get(reverse('browse')).status_code, 200)
+
+    def test_library_add_rejected_for_regular_user(self):
+        """Обычный пользователь не может добавить произвольный путь."""
+        response = self.client.post(reverse('library_page'),
+                                    {'path': 'C:\\'}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'только администраторы')
+        from .models import LibraryFolder
+        self.assertFalse(LibraryFolder.objects.filter(user=self.user).exists())
+
+    def test_watch_redirects_to_own_entry_only(self):
+        """watch принимает pk записи (Entry), чужую запись не отдаёт."""
+        other = User.objects.create_user('someone', password='x12345678')
+        foreign = Entry.objects.create(
+            user=other, title=Title.objects.create(name='Чужой'))
+        response = self.client.get(reverse('watch', args=[foreign.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_stream_denied_for_foreign_title(self):
+        """Стрим чужого фильма недоступен (404), своего — отдаёт файл."""
+        other = User.objects.create_user('someone2', password='x12345678')
+        foreign_title = Title.objects.create(name='Чужо2')
+        Entry.objects.create(user=other, title=foreign_title)
+        self.assertEqual(self.client.get(
+            reverse('stream', args=[foreign_title.pk])).status_code, 404)
+        # своя запись без файла — 404 по файлу, но не по праву доступа
+        self.assertEqual(self.client.get(
+            reverse('stream', args=[self.title.pk])).status_code, 404)
+
+
+class PlayerTest(TestCase):
+    """Плеер: нет автозапуска, форматы mkv/avi, ссылка-гиперссылка."""
+
+    def setUp(self):
+        self.user = _register(self.client, 'playerfan')
+        self.title = Title.objects.create(name='Плеер', year=2022)
+        self.entry = Entry.objects.create(user=self.user, title=self.title)
+
+    def test_video_has_no_autoplay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            video = Path(tmp) / 'movie.mp4'
+            video.write_bytes(b'\x00')
+            self.client.post(reverse('entry_detail', args=[self.entry.pk]),
+                             {'file': str(video)})
+        page = self.client.get(
+            reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, 'autoplay')
+
+    def test_file_dialog_accepts_mkv_avi(self):
+        page = self.client.get(
+            reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
+        self.assertContains(page, 'accept=".mp4,.mkv,.avi')
+
+    def test_streaming_mark_shows_hyperlink_not_file_ui(self):
+        """Метка «стриминг»: ссылка — гиперссылка, интерфейс файла скрыт."""
+        self.entry.location = 'streaming'
+        self.entry.streaming_url = 'https://example.com/watch'
+        self.entry.save(update_fields=['location', 'streaming_url'])
+        page = self.client.get(
+            reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
+        self.assertContains(page,
+                            'href="https://example.com/watch"', html=False)
+        self.assertNotContains(page, 'Выбрать файл…')
+
+    def test_streaming_mark_hides_file_field_on_info_tab(self):
+        """Поле URL стриминга показывается только при метке «Стриминг»."""
+        page = self.client.get(
+            reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
+        self.assertContains(page, 'display:none')  # поле скрыто при «локально»
+        # при метке «стриминг» поле видно
+        self.entry.location = 'streaming'
+        self.entry.save(update_fields=['location'])
+        page = self.client.get(
+            reverse('entry_detail', args=[self.entry.pk]) + '?tab=player')
+        self.assertContains(page, 'id="streamingUrlField"')
+        self.assertNotContains(page, 'id="streamingUrlField"\n               style="display:none"')
+
+
+class SettingsTest(TestCase):
+    """Секреты вынесены в переменные окружения, а не лежат в репозитории."""
+
+    def test_secret_key_not_hardcoded_insecure(self):
+        from django.conf import settings
+        self.assertNotIn('django-insecure-2!kqdqwbw', settings.SECRET_KEY)
+
+    def test_tmdb_key_comes_from_environment(self):
+        from django.conf import settings
+        import os
+        self.assertEqual(settings.TMDB_API_KEY,
+                         os.environ.get('TMDB_API_KEY', ''))

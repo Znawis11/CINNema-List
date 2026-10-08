@@ -10,23 +10,34 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+from dotenv import load_dotenv
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
+
+# --- секреты из переменных окружения (.env в .gitignore) -----------------------
+
+def _env(key, default=''):
+    return os.environ.get(key, default)
+
+
+def _env_bool(key, default=False):
+    return os.environ.get(key, str(default)).lower() in ('1', 'true', 'yes', 'on')
+
+
+SECRET_KEY = _env('DJANGO_SECRET_KEY', 'django-insecure-dev-key-change-in-production')
+DEBUG = _env_bool('DJANGO_DEBUG', True)
+ALLOWED_HOSTS = [h for h in _env('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h]
+
+TMDB_API_KEY = _env('TMDB_API_KEY', '')
+OMDB_API_KEY = _env('OMDB_API_KEY', 'trilogy')
+KINOPOISK_API_KEY = _env('KINOPOISK_API_KEY', '')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-2!kqdqwbw+8lv=fzzd&smaqpra3=9+q_+b#da6n_vv5ho%$8w('
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -115,6 +126,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
+STATIC_URL = 'static/'
+
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
@@ -122,23 +135,10 @@ LOGOUT_REDIRECT_URL = '/'
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-STATIC_URL = 'static/'
-
 MAILERS = {
     'default': {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
 
-TMDB_API_KEY = '637aba21ba668f38b983e72673e462ec'
-
-# OMDb (omdbapi.com) — рейтинги IMDb / Rotten Tomatoes / Metacritic.
-# Ключ 'trilogy' — публичный демо-ключ; при желании получите свой бесплатно
-# на https://www.omdbapi.com/apikey.aspx и подставьте сюда ('' — отключить).
-OMDB_API_KEY = 'trilogy'
-
-# Кинопоиск (api.kinopoisk.dev) — необязательно, нужен токен: '' — отключить.
-KINOPOISK_API_KEY = ''
-
-from pathlib import Path as _P
-MEDIA_LIBRARY_DIR = _P.home() / 'Movies'   # папка, где лежат фильмы
+MEDIA_LIBRARY_DIR = Path.home() / 'Movies'   # папка, где лежат фильмы

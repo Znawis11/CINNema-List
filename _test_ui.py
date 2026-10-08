@@ -123,6 +123,8 @@ check('watch -> плеер', r.status_code == 302 and '/entry/' in r.url and 'ta
       f'{r.status_code} {getattr(r, "url", "")}')
 
 # добавление вручную: форма и сохранение
+from tracker.models import Title as _T
+_T.objects.filter(name='Тестовый фильм').delete()  # чистим с прошлого запуска
 r = c.get('/entry/add/')
 check('форма добавления', r.status_code == 200, r.status_code)
 r = c.post('/entry/add/', {'name': 'Тестовый фильм', 'director': 'X', 'type': 'movie',
@@ -130,7 +132,6 @@ r = c.post('/entry/add/', {'name': 'Тестовый фильм', 'director': 'X
 check('добавление вручную -> коллекция', r.status_code == 302 and r.url == '/collection/',
       f'{r.status_code} {getattr(r, "url", "")}')
 # убираем тестовый фильм за собой
-from tracker.models import Title as _T
 _T.objects.filter(name='Тестовый фильм').delete()
 
 # --- рецензии и метка «где находится фильм»

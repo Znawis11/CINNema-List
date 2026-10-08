@@ -369,6 +369,7 @@ def _series_ctx(request, entry, season=None):
         episodes.append({**ep,
                          'watched_at': rec.watched_at if rec else None,
                          'local_file': rec.local_file if rec else '',
+                         'streaming_url': rec.streaming_url if rec else '',
                          'ep_pk': rec.pk if rec else None})
     # серии, отмеченные вручную, но не найденные в TMDB (например, сбитый номер)
     for (sn, num), rec in watched.items():
@@ -377,6 +378,7 @@ def _series_ctx(request, entry, season=None):
                              'runtime': None, 'air_date': '',
                              'watched_at': rec.watched_at,
                              'local_file': rec.local_file,
+                             'streaming_url': rec.streaming_url,
                              'ep_pk': rec.pk})
     episodes.sort(key=lambda e: e['number'])
 
@@ -983,8 +985,7 @@ def legal_page(request, page):
 @login_required
 def watch(request, pk):
     """Страница просмотра перенесена во вкладку «Видеоплеер» карточки фильма."""
-    title = get_object_or_404(Title, pk=pk)
-    entry, _ = Entry.objects.get_or_create(user=request.user, title=title)
+    entry = get_object_or_404(Entry, pk=pk, user=request.user)
     return redirect(f"{reverse('entry_detail', args=[entry.pk])}?tab=player")
 
 
@@ -1011,7 +1012,8 @@ def _path_for_stream(request, title, ep_pk=None):
 @login_required
 def stream(request, pk, ep_pk=None):
     """Отдача видеофайла в плеер с поддержкой заголовка Range (перемотка)."""
-    title = get_object_or_404(Title, pk=pk)
+    entry = get_object_or_404(Entry, title__pk=pk, user=request.user)
+    title = entry.title
     path = _path_for_stream(request, title, ep_pk)
     if not path:
         raise Http404
@@ -1039,8 +1041,11 @@ def stream(request, pk, ep_pk=None):
                 left -= len(data)
                 yield data
 
-    resp = StreamingHttpResponse(chunks(), status=status,
-                                 content_type=mimetypes.guess_type(path.name)[0] or 'video/mp4')
+    # mimetypes не знает про mkv/avi на всех платформах — указываем явно
+    ctype = (mimetypes.guess_type(path.name)[0]
+             or {'.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo'}.get(path.suffix.lower())
+             or 'video/mp4')
+    resp = StreamingHttpResponse(chunks(), status=status, content_type=ctype)
     resp['Accept-Ranges'] = 'bytes'
     resp['Content-Length'] = str(length)
     if status == 206:
@@ -1052,18 +1057,24 @@ def stream(request, pk, ep_pk=None):
 
 @login_required
 def library_page(request):
-    """Папки пользователя с фильмами: добавление/удаление папок (вкладка «Папки»)."""
+    """Папки пользователя с фильмами: добавление/удаление папок (вкладка «Папки»).
+
+    Добавление путей доступно только администраторам — иначе любой
+    пользователь мог бы добавить системные папки (например, /etc).
+    """
     error = ''
     if request.method == 'POST':
         if request.POST.get('action') == 'remove':
             LibraryFolder.objects.filter(user=request.user,
                                          pk=request.POST.get('id')).delete()
-        else:
+        elif request.user.is_staff:
             p = Path(request.POST.get('path', '').strip()).expanduser()
             if p.is_dir():
                 LibraryFolder.objects.get_or_create(user=request.user, path=str(p.resolve()))
             else:
                 error = 'Такой папки нет. Проверьте путь.'
+        else:
+            error = 'Добавлять папки могут только администраторы.'
         if not error:
             return redirect('library_page')
     folders = list(LibraryFolder.objects.filter(user=request.user))
@@ -1074,7 +1085,13 @@ def library_page(request):
 
 @login_required
 def browse(request):
-    """Проводник браузера: список папок и видеофайлов для выбора фильма."""
+    """Проводник браузера: список папок и видеофайлов для выбора фильма.
+
+    Доступен только администраторам — иначе любой пользователь мог бы
+    просматривать структуру папок сервера.
+    """
+    if not request.user.is_staff:
+        raise Http404
     p = Path(request.GET.get('path') or Path.home()).expanduser()
     try:
         p = p.resolve()
