@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
-{# --- поиск фильмов (перенесён сюда со старой вкладки «Поиск фильмов») #}
+
 <section class="mb-4">
   <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-2">
     <div>
@@ -23,7 +23,6 @@
   </div>
 </section>
 
-{# --- популярное сейчас (перенесено из коллекции) #}
 {% if popular %}
 <section class="mb-4">
   <h5 class="mb-2">🔥 Популярное сейчас
@@ -31,9 +30,7 @@
   </h5>
   <div class="popular-row">
     {% for p in popular %}
-    {# Карточка ведёт на отдельную страницу фильма: IMDb-id превращаем
-       в TMDB-id уже на сервере (views.film_by_imdb); если TMDB не знает
-       фильм — остаётся запасной путь, обычный поиск на главной. #}
+    
     <a class="pop-card card h-100 hover-card"
        href="{% if p.id %}{% url 'film_by_imdb' p.id %}?q={{ p.title|urlencode }}{% else %}{% url 'home' %}?q={{ p.title|urlencode }}{% endif %}"
        title="Открыть «{{ p.title }}»">
@@ -55,7 +52,6 @@
 </section>
 {% endif %}
 
-{# --- последние добавленные #}
 <section class="mb-4">
   <div class="d-flex justify-content-between align-items-center mb-2">
     <h5 class="mb-0">Последнее в коллекции</h5>
@@ -71,7 +67,6 @@
   {% endif %}
 </section>
 
-{# --- подборки #}
 <section class="mb-2">
   <div class="d-flex justify-content-between align-items-center mb-2">
     <h5 class="mb-0">Мои подборки</h5>

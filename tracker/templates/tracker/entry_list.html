@@ -7,7 +7,6 @@
   <a href="{% url 'entry_create' %}" class="btn btn-success">+ Добавить вручную</a>
 </div>
 
-{# --- Поиск и фильтры (обновляются через htmx) --- #}
 <form id="filters" class="mb-4"
       hx-get="{% url 'entry_list' %}"
       hx-trigger="keyup changed delay:300ms from:#q,
@@ -141,7 +140,7 @@
 </form>
 
 <div class="row">
-  {# --- Сайдбар с подборками --- #}
+  
   <div class="col-lg-3 mb-3">
     <div class="card sticky-top" style="top: 1rem; z-index: 100;">
       <div class="card-header fw-semibold">Мои подборки</div>
@@ -191,7 +190,6 @@
     </div>
   </div>
 
-  {# --- Результаты --- #}
   <div class="col-lg-9">
     {% if active_collection %}
       <div class="alert alert-info py-2 d-flex justify-content-between align-items-center">
@@ -201,13 +199,11 @@
     {% endif %}
 
     {% if pick_mode %}
-      {# Режим «галочек»: форма-обёртка стоит ВОКРУГ карточек, поэтому её
-         поля entries попадают в общий submit; сама форма не заменяется
-         при htmx-обновлении (меняется только #results внутри неё). #}
+      
       <form method="post" action="{% url 'entry_list' %}" id="pickForm">
         {% csrf_token %}
         <input type="hidden" name="action" value="add">
-        {# back=main — после добавления вернуться в этот список, а не в подборку #}
+        
         <input type="hidden" name="back" value="main">
         <div class="card card-body mb-3 py-2 d-flex flex-wrap gap-2 align-items-center">
           <span class="fw-semibold text-nowrap">Добавить в подборку:</span>
@@ -229,13 +225,11 @@
         «Добавить выбранные».
       </p>
       <script>
-        // «Выбрать все» — переключает галочки всех карточек текущей выдачи
         const pickAll = document.getElementById('pickAll');
         if (pickAll) pickAll.addEventListener('change', () => {
           document.querySelectorAll('input[name="entries"]')
                   .forEach(c => { c.checked = pickAll.checked; });
         });
-        // без единой отметки отправлять некуда — просим выбрать фильмы
         document.getElementById('pickForm').addEventListener('submit', e => {
           if (!document.querySelector('input[name="entries"]:checked')) {
             e.preventDefault();

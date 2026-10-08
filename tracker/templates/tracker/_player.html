@@ -1,6 +1,6 @@
 {% if title.local_file or playing or is_series %}
   {% if is_series %}
-    {# --- панель выбора сезона и серии #}
+    
     <div class="card mb-3">
       <div class="card-body py-2">
         <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -20,7 +20,7 @@
         <div class="d-flex flex-wrap gap-1">
           {% for ep in episodes %}
             {% if ep.local_file or ep.streaming_url %}
-              {# у серии есть свои данные (файл или ссылка) — можно переходить #}
+              
               <a class="btn btn-sm btn-outline-primary"
                  href="?tab=player&season={{ current_season }}&ep={{ ep.ep_pk }}"
                  title="{{ ep.name }}{% if ep.streaming_url %} · по ссылке{% endif %}{% if ep.watched_at %} · просмотрена {{ ep.watched_at|date:'d.m.Y' }}{% endif %}">
@@ -45,9 +45,8 @@
     </div>
   {% endif %}
 
-  {# --- воспроизведение: файл серии/фильма либо ссылка этой серии #}
   {% if playing.streaming_url and not playing.local_file %}
-    {# файла нет — у серии своя ссылка на стриминг #}
+    
     <div class="alert alert-primary d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
       <span>Файл этой серии не назначен — смотрим по её ссылке.</span>
       <a href="{{ playing.streaming_url }}" target="_blank" rel="noopener"
@@ -60,8 +59,6 @@
       Браузер не поддерживает это видео.
     </video>
     <script>
-      // Учёт времени просмотра: пинг каждые 45 с во время воспроизведения,
-      // финальный пинг — на паузе/окончании/закрытии вкладки.
       (function () {
         const video = document.getElementById('playerVideo');
         const url = "{% url 'track_ping' title.pk %}";
@@ -79,7 +76,6 @@
         video.addEventListener('ended', stop);
         window.addEventListener('beforeunload', () => timer && send());
 
-        // --- серии: отметка «просмотрена», когда видео досмотрено до конца
         const toast = document.createElement('div');
         toast.className = 'position-fixed bottom-0 end-0 p-3';
         toast.style.zIndex = 1080;
@@ -107,9 +103,7 @@
             }),
           }).then(r => { if (r.ok) say('Серия ' + video.dataset.number + ' отмечена просмотренной'); });
         };
-        // досмотрели до конца
         video.addEventListener('ended', markWatched);
-        // страховка: >= 95% длительности
         video.addEventListener('timeupdate', () => {
           if (video.duration && video.currentTime / video.duration >= 0.95) markWatched();
         });
@@ -130,7 +124,6 @@
     </div>
   {% endif %}
 
-  {# --- данные активной серии: свой файл и своя ссылка (сохраняются в Episode) #}
   {% if playing %}
     <div class="card card-body mt-2 mb-2">
       <div class="fw-semibold mb-2">
@@ -149,7 +142,6 @@
         </span>
       </div>
 
-      {# кнопки файла — всегда привязываются к ЭТОЙ серии (season/number) #}
       <div class="d-flex gap-2 flex-wrap align-items-center mb-2">
         {% include 'tracker/_file_dialog.html' with season=playing.season number=playing.number class='btn-sm btn-outline-primary' label='📁 Файл этой серии' %}
         <a class="btn btn-sm btn-outline-secondary text-nowrap"
@@ -161,7 +153,6 @@
         {% include 'tracker/_file_form.html' %}
       </div>
 
-      {# своя ссылка этой серии (пустое поле — ссылку убираем) #}
       <form method="post" action="{% url 'episode_stream' entry.pk %}"
             class="d-flex gap-2 flex-wrap align-items-center mt-1">
         {% csrf_token %}
@@ -180,7 +171,7 @@
       и сохранения ссылки для именно этой серии.
     </div>
   {% else %}
-    {# --- у обычного фильма: строка с файлом и подключённые папки #}
+    
     <div class="d-flex justify-content-between align-items-center gap-2 mt-2 flex-wrap">
       <span class="text-muted small text-truncate" title="{{ title.local_file }}">
         Файл: {{ title.local_file|default:"—" }}</span>

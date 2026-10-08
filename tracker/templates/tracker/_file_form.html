@@ -1,7 +1,4 @@
-{# Привязка файла из подключённых папок.
-   Если открыта конкретная серия (есть playing) — в форму подставляются
-   season/number, и файл запишется в Episode этой серии, а не в общий
-   фильм (views.entry_detail передаёт их в _bind_path). #}
+
 <form method="post" action="{% url 'entry_detail' entry.pk %}?tab=player" class="d-flex gap-2 flex-wrap align-items-center">
   {% csrf_token %}
   {% if playing %}

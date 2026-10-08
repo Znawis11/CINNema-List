@@ -28,7 +28,6 @@
     * { font-family: 'Nunito', system-ui, sans-serif; }
     body { min-height: 100vh; background: var(--bg); color: var(--text); }
 
-    /* навигация */
     .navbar { background: var(--bg2) !important; border-bottom: 2px solid var(--border); }
     .navbar .nav-link { color: var(--muted) !important; font-weight: 700; border-radius: 999px; padding: .35rem .9rem !important; margin: 0 .15rem; transition: all .15s; }
     .navbar .nav-link:hover { color: var(--text) !important; background: var(--card2); }
@@ -37,18 +36,15 @@
     .navbar-username { color: var(--text); }
     a:hover .navbar-username { color: var(--accent3); }
 
-    /* карточки */
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; color: var(--text); transition: transform .15s ease, box-shadow .15s ease, border-color .15s; }
     .card:hover { border-color: var(--accent); }
     .hover-card:hover { transform: translateY(-4px); box-shadow: 0 .75rem 2rem rgba(139,92,246,.25) !important; border-color: var(--accent); }
     .card-header { background: var(--card2); border-bottom: 1px solid var(--border); font-weight: 800; }
     .card-footer { background: var(--card2); border-top: 1px solid var(--border); }
 
-    /* постеры */
     .poster { aspect-ratio: 2 / 3; object-fit: cover; width: 100%; background: var(--card2); border-radius: .75rem .75rem 0 0; }
     .poster-ph { aspect-ratio: 2 / 3; width: 100%; background: var(--card2); border-radius: .75rem .75rem 0 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: .8rem; }
 
-    /* кнопки */
     .btn { border-radius: 999px; font-weight: 700; }
     .btn-primary { background: var(--grad); border: none; color: #fff; }
     .btn-primary:hover, .btn-primary:focus { background: var(--grad2); color: #fff; box-shadow: 0 0 1rem rgba(139,92,246,.4); }
@@ -70,7 +66,6 @@
     .btn-link { color: var(--accent3); }
     .btn-link:hover { color: var(--pink); }
 
-    /* формы */
     .form-control, .form-select { background: var(--bg2); border: 1px solid var(--border); color: var(--text); border-radius: .75rem; }
     .form-control:focus, .form-select:focus { background: var(--bg2); border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 .2rem rgba(139,92,246,.25); }
     .form-control::placeholder { color: var(--muted); }
@@ -80,7 +75,6 @@
     .form-label { color: var(--muted); font-weight: 600; }
     .form-text { color: var(--muted); }
 
-    /* бейджи */
     .badge { border-radius: 999px; font-weight: 700; }
     .bg-primary { background: var(--grad) !important; }
     .bg-secondary { background: var(--card2) !important; color: var(--muted) !important; }
@@ -93,59 +87,48 @@
     .bg-warning-subtle { background: rgba(251,191,36,.15) !important; color: #fbbf24 !important; }
     .bg-dark-subtle { background: rgba(139,92,246,.15) !important; color: var(--accent3) !important; }
 
-    /* текст */
     .text-muted { color: var(--muted) !important; }
     a { color: var(--accent3); }
     a:hover { color: var(--pink); }
     h1, h2, h3, h4, h5, h6 { font-weight: 800; }
 
-    /* таблицы и списки */
     .list-group { --bs-list-group-bg: var(--card); --bs-list-group-color: var(--text); --bs-list-group-border-color: var(--border); }
     .list-group-item { background: var(--card); color: var(--text); border-color: var(--border); }
     .list-group-item-action:hover, .list-group-item-action:focus { background: var(--card2); color: var(--text); }
     .list-group-item-action.active { background: var(--grad); border-color: var(--accent); color: #fff; }
 
-    /* вкладки */
     .nav-tabs { border-bottom: 2px solid var(--border); }
     .nav-tabs .nav-link { color: var(--muted); border: none; border-bottom: 3px solid transparent; border-radius: .75rem .75rem 0 0; font-weight: 700; }
     .nav-tabs .nav-link:hover { color: var(--text); border-bottom-color: var(--accent); }
     .nav-tabs .nav-link.active { color: #fff; background: var(--grad); border-bottom-color: transparent; }
 
-    /* чипы-фильтры */
     .filter-chip input { position: absolute; opacity: 0; }
     .filter-chip span { display: inline-block; padding: .3rem .8rem; font-size: .85rem; font-weight: 700; border: 2px solid var(--border); border-radius: 999px; background: var(--card); cursor: pointer; user-select: none; transition: all .15s; color: var(--muted); }
     .filter-chip span:hover { border-color: var(--accent); color: var(--text); }
     .filter-chip input:checked + span { background: var(--grad); border-color: var(--accent); color: #fff; box-shadow: 0 0 .75rem rgba(139,92,246,.35); }
     .filter-chip input:focus + span { box-shadow: 0 0 0 .2rem rgba(139,92,246,.25); }
 
-    /* карточки рейтингов */
     .rating-card .value { font-size: 1.4rem; font-weight: 800; line-height: 1.2; }
     .rating-card .label { font-size: .78rem; opacity: .85; }
 
-    /* аватар (первая буква имени) */
     .avatar-circle { width: 32px; height: 32px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; box-shadow: 0 0 .75rem rgba(139,92,246,.4); }
     .avatar-lg { width: 72px; height: 72px; font-size: 1.8rem; }
 
-    /* строка «Популярное сейчас» */
     .popular-row { display: flex; gap: .8rem; overflow-x: auto; padding: .25rem .25rem 1rem; scroll-snap-type: x proximity; }
     .popular-row .pop-card { flex: 0 0 138px; scroll-snap-align: start; text-decoration: none; }
     .popular-row::-webkit-scrollbar { height: 8px; }
     .popular-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-    /* галочка выбора фильма для добавления в подборку (колонка «Все фильмы») */
     .pick-mark { position: absolute; top: 6px; right: 6px; z-index: 5; padding: .2rem .3rem; border-radius: .6rem; background: rgba(13,10,26,.78); border: 1px solid var(--border); }
     .pick-mark .form-check-input { width: 1.35em; height: 1.35em; cursor: pointer; }
 
-    /* прогресс */
     .progress { background: var(--bg2); border-radius: 999px; }
     .progress-bar { background: var(--grad); border-radius: 999px; }
 
-    /* хлебные крошки */
     .breadcrumb { --bs-breadcrumb-divider-color: var(--muted); }
     .breadcrumb-item a { color: var(--accent3); text-decoration: none; }
     .breadcrumb-item.active { color: var(--muted); }
 
-    /* алерты */
     .alert { border-radius: 1rem; border: 1px solid var(--border); }
     .alert-info { background: rgba(99,102,241,.12); border-color: var(--accent2); color: #c7d2fe; }
     .alert-warning { background: rgba(251,191,36,.1); border-color: #92400e; color: #fde68a; }
@@ -153,13 +136,10 @@
     .alert-success { background: rgba(16,185,129,.1); border-color: #065f46; color: #6ee7b7; }
     .alert-secondary { background: var(--card2); border-color: var(--border); color: var(--muted); }
 
-    /* видео */
     video { border-radius: 1rem; }
 
-    /* разделители */
     hr { border-color: var(--border); }
 
-    /* скроллбар */
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
@@ -214,11 +194,6 @@
   {% block content %}{% endblock %}
 </div>
 
-{# --- футер: реквизиты, возрастная маркировка 18+ и правовые документы.
-   По законодательству РФ на сайте должны быть доступны: пользовательское
-   соглашение, политика обработки персональных данных (152-ФЗ), согласие
-   на обработку ПДн, сведения об операторе и контакты, а также отметка
-   о возрастной маркировке (436-ФЗ) и о том, что сайт не является СМИ. #}
 <footer class="mt-5 pt-4" style="border-top: 2px solid var(--border)">
   <div class="container">
     <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center">
@@ -245,8 +220,6 @@
 </footer>
 <input type="file" id="fileDialogInput" accept=".mp4,.mkv,.avi,video/*" class="d-none">
 <script>
-// Постер не загрузился (например, недоступен хост изображений) —
-// вместо «битой» картинки показываем аккуратную заглушку.
 function posterFallback(img) {
   if (!img || img.tagName !== 'IMG' || !img.classList.contains('poster')) return;
   const ph = document.createElement('div');
@@ -259,12 +232,9 @@ document.addEventListener('error', e => posterFallback(e.target), true);
 document.querySelectorAll('img.poster').forEach(img => {
   if (img.complete && img.naturalWidth === 0) posterFallback(img);
 });
-// Системный диалог выбора файла: браузер не отдаёт серверу путь к файлу,
-// поэтому шлём имя и размер — сервер сам найдёт файл на диске и привяжет.
 function fileDialog(btn, season, number, action) {
   const wrap = btn.closest('.file-dialog');
   let input = wrap && wrap.querySelector('input[type=file]');
-  // кнопки вне .file-dialog (например, серия в плеере) используют скрытый общий input
   if (!input) {
     input = document.getElementById('fileDialogInput');
     if (!input) return;

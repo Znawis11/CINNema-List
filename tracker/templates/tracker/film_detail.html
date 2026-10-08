@@ -1,14 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
-{# Отдельная страница фильма ВНЕ коллекции: только информация и описание.
-   Плеера, вкладок и кнопок редактирования здесь намеренно нет — всё
-   появляется после того, как фильм добавлен в коллекцию. #}
+
 <div class="mb-3">
   <a href="{% url 'home' %}" class="small text-decoration-none">← Назад к поиску</a>
 </div>
 
 <div class="row">
-  {# --- постер и кнопка добавления #}
+  
   <div class="col-md-3 mb-3">
     {% if title.poster_url %}
       <img src="{{ title.poster_url }}" class="poster shadow-sm" alt="{{ title.name }}">
@@ -18,14 +16,13 @@
 
     <div class="d-grid gap-2 mt-2">
       {% if entry %}
-        {# фильм уже добавлен — просто показываем, где он лежит #}
+        
         <span class="btn btn-success">✓ Уже в вашей коллекции</span>
         <a href="{% url 'entry_detail' entry.pk %}" class="btn btn-outline-primary">
           Открыть карточку в коллекции
         </a>
       {% else %}
-        {# кнопка «Добавить в коллекцию»: после добавления возвращаемся
-           сюда же (next = текущий адрес), где уже появится ссылка выше #}
+        
         <form method="post" action="{% url 'tmdb_add' media_type tmdb_id %}">
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.path }}">
@@ -38,7 +35,6 @@
     </div>
   </div>
 
-  {# --- основная информация о фильме #}
   <div class="col-md-9">
     <h2 class="mb-1">{{ title.name }}</h2>
     {% if title.original_name and title.original_name != title.name %}
@@ -56,7 +52,6 @@
       {% endfor %}
     </div>
 
-    {# рейтинги сторонних сайтов (карточки одинаковые с вкладкой «Информация») #}
     {% if rating_cards %}
       <h6 class="mb-2">Рейтинги</h6>
       <div class="row g-2 mb-3">

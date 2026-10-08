@@ -2,8 +2,7 @@
 {% for r in results %}
   <div class="col-md-3 mb-3">
     <div class="card h-100">
-      {# вся карточка — ссылка на отдельную страницу фильма (вне коллекции);
-         кнопка «Добавить в коллекцию» внизу остаётся отдельной формой #}
+      
       <a href="{% url 'film_detail' r.media_type r.id %}" class="text-decoration-none text-dark">
         {% if r.poster %}<img src="{{ r.poster }}" class="card-img-top poster" alt="{{ r.title }}">{% endif %}
         <div class="card-body">
