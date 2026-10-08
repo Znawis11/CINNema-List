@@ -91,7 +91,13 @@ def _watched_minutes(entry):
 @login_required
 def home(request):
     """Главная: поиск фильмов, популярное сейчас и последние добавления."""
-    entries = _with_scores(list(
+    # расширенный поиск по коллекции — тот же, что на странице коллекции
+    found, ctx = _filter_entries(request)
+    if request.headers.get('HX-Request'):
+        return render(request, 'tracker/_entry_cards.html',
+                      dict(ctx, entries=found))
+
+    recent = _with_scores(list(
         Entry.objects.filter(user=request.user)
         .select_related('title')
         .prefetch_related('title__genres', 'tags')
@@ -106,17 +112,20 @@ def home(request):
               else _genre_chart(request.user,
                                 _watch_stats(request.user)['genre_hours']))
 
-    return render(request, 'tracker/home.html', {
-        'q': request.GET.get('q', '').strip(),
-        'popular': imdbapi.popular(18),
-        'recent': entries,
-        'stats': stats,
-        'collections': Collection.objects.filter(user=request.user)
+    return render(request, 'tracker/home.html', dict(
+        ctx,
+        entries=found,
+        # результаты показываем, только если пользователь что-то искал
+        has_query=bool(request.GET),
+        popular=imdbapi.popular(18),
+        recent=recent,
+        stats=stats,
+        collections=Collection.objects.filter(user=request.user)
                                          .annotate(n=Count('entries'))
                                          .order_by('name')[:8],
-        'has_search': True,
-        'genres': genres,
-    })
+        has_search=True,
+        genres=genres,
+    ))
 
 
 def register(request):
@@ -182,16 +191,17 @@ def _collection_action(request):
     return redirect(f"{reverse('entry_list')}?collection={coll.pk}")
 
 
-@login_required
-def entry_list(request):
-    """Основной список коллекции + подборки слева.
+def _filter_entries(request):
+    """Расширенный поиск по коллекции: (entries, ctx).
 
-    GET — карточки фильмов (с поиском, фильтрами и сортировкой), POST —
-    действия с подборками (создание, добавление фильмов галочками и т. п.).
+    Текстовый запрос ищет по названию, режиссёру, жанрам, своим тегам и
+    рецензии; плюс фильтры по жанрам, тегам, длительности, оценкам, типу,
+    наличию рецензии, месту просмотра и сортировка. Используется и в
+    коллекции, и на главной, поэтому настройки поиска у них общие.
+
+    SQLite не умеет регистронезависимый поиск по кириллице, поэтому всё
+    это выполняется в Python (см. _with_scores).
     """
-    if request.method == 'POST':
-        return _collection_action(request)
-
     entries = (Entry.objects.filter(user=request.user)
                .select_related('title')
                .prefetch_related('title__genres', 'tags'))
@@ -207,6 +217,7 @@ def entry_list(request):
                    q in e.title.name.lower()
                    or q in e.title.director.lower()
                    or q in e.review.lower()
+                   or (e.title.year and q in str(e.title.year))
                    or any(q in g.name.lower() for g in e.title.genres.all())
                    or any(q in t.name.lower() for t in e.tags.all())]
 
@@ -255,7 +266,50 @@ def entry_list(request):
     if location in dict(Entry.LOCATIONS):
         entries = [e for e in entries if e.location == location]
 
-    # подборка
+    sort = request.GET.get('sort', 'added')
+    if sort == 'year':
+        entries.sort(key=lambda e: e.title.year or 0, reverse=True)
+    elif sort == 'name':
+        entries.sort(key=lambda e: e.title.name.lower())
+    elif sort == 'my':
+        entries.sort(key=lambda e: e.rating or 0, reverse=True)
+    elif sort == 'score':
+        entries.sort(key=lambda e: e.site_score or 0, reverse=True)
+    else:
+        entries.sort(key=lambda e: e.added_at, reverse=True)
+
+    ctx = {'q': q, 'status': status, 'sort': sort,
+           'dur': dur, 'min_rating': request.GET.get('min_rating', ''),
+           'min_score': request.GET.get('min_score', ''), 'type': title_type,
+           'review': review, 'location': location,
+           'genres_sel': genres_sel, 'tags_sel': tags_sel,
+           'durations': DURATIONS, 'sorts': SORTS, 'statuses': Entry.STATUSES,
+           'types': Title.TYPES, 'my_ratings': MY_RATINGS,
+           'site_ratings': SITE_RATINGS, 'reviews': REVIEWS,
+           'locations': LOCATIONS,
+           'all_genres': Genre.objects.all().order_by('name'),
+           'all_tags': Tag.objects.filter(user=request.user).order_by('name'),
+           'active_filters': len([1 for v in (q, status, dur, title_type,
+                                              review, location,
+                                              request.GET.get('min_rating'),
+                                              request.GET.get('min_score'),
+                                              genres_sel, tags_sel) if v])}
+    return entries, ctx
+
+
+@login_required
+def entry_list(request):
+    """Основной список коллекции + подборки слева.
+
+    GET — карточки фильмов (с поиском, фильтрами и сортировкой), POST —
+    действия с подборками (создание, добавление фильмов галочками и т. п.).
+    """
+    if request.method == 'POST':
+        return _collection_action(request)
+
+    entries, ctx = _filter_entries(request)
+
+    # подборка — только на странице коллекции (на главной подборок нет)
     collection = request.GET.get('collection', '')
     active_collection = None
     other_entries = []
@@ -271,18 +325,7 @@ def entry_list(request):
                              .order_by('title__name'))
         else:
             entries = []
-
-    sort = request.GET.get('sort', 'added')
-    if sort == 'year':
-        entries.sort(key=lambda e: e.title.year or 0, reverse=True)
-    elif sort == 'name':
-        entries.sort(key=lambda e: e.title.name.lower())
-    elif sort == 'my':
-        entries.sort(key=lambda e: e.rating or 0, reverse=True)
-    elif sort == 'score':
-        entries.sort(key=lambda e: e.site_score or 0, reverse=True)
-    else:
-        entries.sort(key=lambda e: e.added_at, reverse=True)
+        ctx['active_filters'] += 1
 
     # подборки пользователя (для сайдбара и для добавления галочками)
     collections = (Collection.objects.filter(user=request.user)
@@ -290,28 +333,9 @@ def entry_list(request):
 
     # режим «галочек»: включается только в основном списке (без открытой
     # подборки) и только если подборки уже созданы — иначе добавлять некуда
-    pick_mode = active_collection is None and bool(collections)
-
-    ctx = {'entries': entries, 'q': q, 'status': status, 'sort': sort,
-           'dur': dur, 'min_rating': request.GET.get('min_rating', ''),
-           'min_score': request.GET.get('min_score', ''), 'type': title_type,
-           'review': review, 'location': location, 'collection': collection,
-           'genres_sel': genres_sel, 'tags_sel': tags_sel,
-           'durations': DURATIONS, 'sorts': SORTS, 'statuses': Entry.STATUSES,
-           'types': Title.TYPES, 'my_ratings': MY_RATINGS,
-           'site_ratings': SITE_RATINGS, 'reviews': REVIEWS,
-           'locations': LOCATIONS,
-           'collections': collections,
-           'pick_mode': pick_mode,
-           'active_collection': active_collection,
-           'other_entries': other_entries,
-           'all_genres': Genre.objects.all().order_by('name'),
-           'all_tags': Tag.objects.filter(user=request.user).order_by('name'),
-           'active_filters': len([1 for v in (q, status, dur, title_type,
-                                              review, location, collection,
-                                              request.GET.get('min_rating'),
-                                              request.GET.get('min_score'),
-                                              genres_sel, tags_sel) if v])}
+    ctx.update(entries=entries, collection=collection, collections=collections,
+               pick_mode=active_collection is None and bool(collections),
+               active_collection=active_collection, other_entries=other_entries)
 
     if request.headers.get('HX-Request'):
         return render(request, 'tracker/_entry_cards.html', ctx)

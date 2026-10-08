@@ -11,7 +11,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Collection, Entry, Episode, Genre, Title, WatchSession
+from .models import (Collection, Entry, Episode, Genre, Tag, Title,
+                     WatchSession)
 from . import tmdb
 
 
@@ -417,6 +418,104 @@ class WatchTimeTest(TestCase):
         home = self.client.get(reverse('home'))
         self.assertEqual(home.context['genres']['labels'], [])
         self.assertNotContains(home, 'Мои предпочтения по жанрам')
+
+
+class HomeSearchTest(TestCase):
+    """Расширенный поиск на главной — тот же, что в коллекции."""
+
+    def setUp(self):
+        self.user = _register(self.client, 'homesearch')
+        self.tag = Tag.objects.create(user=self.user, name='пересмотр')
+
+        drama = Genre.objects.create(name='Драма')
+        scifi = Genre.objects.create(name='Фантастика')
+
+        self.nolan = Title.objects.create(name='Интерстеллар', director='Кристофер Нолан',
+                                          year=2014, duration_min=169, type='movie')
+        self.nolan.genres.add(scifi)
+        Entry.objects.create(user=self.user, title=self.nolan, rating=5,
+                             review='Отличный фильм про космос')
+
+        self.other = Title.objects.create(name='Комета', director='Жан-Luc Godard',
+                                          year=2021, duration_min=95, type='movie')
+        self.other.genres.add(drama)
+        self.entry_other = Entry.objects.create(user=self.user, title=self.other,
+                                                location='streaming')
+        self.entry_other.tags.add(self.tag)
+
+    def _names(self, query=''):
+        """Названия фильмов, найденных на главной по запросу."""
+        page = self.client.get(f"{reverse('home')}?{query}")
+        return [e.title.name for e in page.context['entries']]
+
+    def test_search_by_title(self):
+        self.assertEqual(self._names('q=Интерстеллар'), ['Интерстеллар'])
+
+    def test_search_by_director(self):
+        """Главная ищет по режиссёру — как в коллекции."""
+        self.assertEqual(self._names('q=Нолан'), ['Интерстеллар'])
+
+    def test_search_by_genre_name(self):
+        self.assertEqual(self._names('q=Драма'), ['Комета'])
+
+    def test_search_by_review(self):
+        self.assertEqual(self._names('q=космос'), ['Интерстеллар'])
+
+    def test_search_by_tag(self):
+        self.assertEqual(self._names('q=пересмотр'), ['Комета'])
+
+    def test_search_by_year(self):
+        self.assertEqual(self._names('q=2021'), ['Комета'])
+
+    def test_genre_filter_checkbox(self):
+        scifi = self.nolan.genres.first()
+        self.assertEqual(self._names(f'genres={scifi.pk}'), ['Интерстеллар'])
+
+    def test_tag_filter(self):
+        self.assertEqual(self._names(f'tags={self.tag.pk}'), ['Комета'])
+
+    def test_duration_and_rating_filters(self):
+        # «Интерстеллар» — 169 мин (от 150) и оценка 5
+        self.assertEqual(self._names('dur=gte150&min_rating=5'), ['Интерстеллар'])
+        self.assertEqual(self._names('dur=lt60'), [])
+
+    def test_location_filter(self):
+        self.assertEqual(self._names('location=streaming'), ['Комета'])
+
+    def test_status_filter(self):
+        self.assertEqual(self._names('status=watched'), [])
+
+    def test_sorting_by_name(self):
+        self.assertEqual(self._names('sort=name'), ['Интерстеллар', 'Комета'])
+
+    def test_home_and_collection_search_match(self):
+        """Одинаковый запрос даёт одинаковый результат на обеих страницах."""
+        home = self._names('q=Комета')
+        coll = [e.title.name for e in
+                self.client.get(f"{reverse('entry_list')}?q=Комета").context['entries']]
+        self.assertEqual(home, coll)
+
+    def test_results_hidden_until_query(self):
+        """Без поиска блок результатов пуст — лишних карточек на главной."""
+        page = self.client.get(reverse('home'))
+        self.assertFalse(page.context['has_query'])
+        self.assertNotContains(page, 'Найдено в моей коллекции')
+
+    def test_htmx_returns_only_cards(self):
+        """hx-запрос отдаёт только карточки, без всей страницы."""
+        page = self.client.get(f"{reverse('home')}?q=Нолан",
+                               headers={'hx-request': 'true'})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Интерстеллар')
+        self.assertNotContains(page, 'Популярное сейчас')
+        self.assertNotContains(page, 'Мои подборки')
+
+    def test_filter_panel_present_on_both_pages(self):
+        """Панель фильтров одна и та же на главной и в коллекции."""
+        for name in ('accept', 'name="dur"', 'name="min_rating"', 'name="review"',
+                     'name="location"', 'name="genres"', 'name="tags"'):
+            self.assertContains(self.client.get(reverse('home')), name)
+            self.assertContains(self.client.get(reverse('entry_list')), name)
 
 
 class SettingsTest(TestCase):
