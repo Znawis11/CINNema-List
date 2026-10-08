@@ -90,13 +90,11 @@ def _watched_minutes(entry):
 
 @login_required
 def home(request):
-    """Главная: поиск фильмов, популярное сейчас и последние добавления."""
-    # расширенный поиск по коллекции — тот же, что на странице коллекции
-    found, ctx = _filter_entries(request)
-    if request.headers.get('HX-Request'):
-        return render(request, 'tracker/_entry_cards.html',
-                      dict(ctx, entries=found))
+    """Главная: поиск фильмов в TMDB, популярное сейчас и последние добавления.
 
+    Поиск на главной ищет только по базе TMDB (поиск по своей коллекции с
+    фильтрами живёт на странице «Коллекция»).
+    """
     recent = _with_scores(list(
         Entry.objects.filter(user=request.user)
         .select_related('title')
@@ -112,20 +110,17 @@ def home(request):
               else _genre_chart(request.user,
                                 _watch_stats(request.user)['genre_hours']))
 
-    return render(request, 'tracker/home.html', dict(
-        ctx,
-        entries=found,
-        # результаты показываем, только если пользователь что-то искал
-        has_query=bool(request.GET),
-        popular=imdbapi.popular(18),
-        recent=recent,
-        stats=stats,
-        collections=Collection.objects.filter(user=request.user)
+    return render(request, 'tracker/home.html', {
+        'q': request.GET.get('q', '').strip(),
+        'popular': imdbapi.popular(18),
+        'recent': recent,
+        'stats': stats,
+        'collections': Collection.objects.filter(user=request.user)
                                          .annotate(n=Count('entries'))
                                          .order_by('name')[:8],
-        has_search=True,
-        genres=genres,
-    ))
+        'has_search': True,
+        'genres': genres,
+    })
 
 
 def register(request):
@@ -194,10 +189,9 @@ def _collection_action(request):
 def _filter_entries(request):
     """Расширенный поиск по коллекции: (entries, ctx).
 
-    Текстовый запрос ищет по названию, режиссёру, жанрам, своим тегам и
-    рецензии; плюс фильтры по жанрам, тегам, длительности, оценкам, типу,
-    наличию рецензии, месту просмотра и сортировка. Используется и в
-    коллекции, и на главной, поэтому настройки поиска у них общие.
+    Текстовый запрос ищет по названию, режиссёру, жанрам, своим тегам,
+    рецензии и году; плюс фильтры по жанрам, тегам, длительности, оценкам,
+    типу, наличию рецензии, месту просмотра и сортировка.
 
     SQLite не умеет регистронезависимый поиск по кириллице, поэтому всё
     это выполняется в Python (см. _with_scores).

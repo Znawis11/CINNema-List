@@ -519,11 +519,11 @@ class WatchTimeTest(TestCase):
         self.assertNotContains(home, 'Мои предпочтения по жанрам')
 
 
-class HomeSearchTest(TestCase):
-    """Расширенный поиск на главной — тот же, что в коллекции."""
+class CollectionSearchTest(TestCase):
+    """Расширенный поиск по коллекции: режиссёр, жанр, теги, рецензия, год."""
 
     def setUp(self):
-        self.user = _register(self.client, 'homesearch')
+        self.user = _register(self.client, 'collsearch')
         self.tag = Tag.objects.create(user=self.user, name='пересмотр')
 
         drama = Genre.objects.create(name='Драма')
@@ -535,7 +535,7 @@ class HomeSearchTest(TestCase):
         Entry.objects.create(user=self.user, title=self.nolan, rating=5,
                              review='Отличный фильм про космос')
 
-        self.other = Title.objects.create(name='Комета', director='Жан-Luc Godard',
+        self.other = Title.objects.create(name='Комета', director='Жан-Люк Годар',
                                           year=2021, duration_min=95, type='movie')
         self.other.genres.add(drama)
         self.entry_other = Entry.objects.create(user=self.user, title=self.other,
@@ -543,15 +543,14 @@ class HomeSearchTest(TestCase):
         self.entry_other.tags.add(self.tag)
 
     def _names(self, query=''):
-        """Названия фильмов, найденных на главной по запросу."""
-        page = self.client.get(f"{reverse('home')}?{query}")
+        """Названия фильмов, найденных в коллекции по запросу."""
+        page = self.client.get(f"{reverse('entry_list')}?{query}")
         return [e.title.name for e in page.context['entries']]
 
     def test_search_by_title(self):
         self.assertEqual(self._names('q=Интерстеллар'), ['Интерстеллар'])
 
     def test_search_by_director(self):
-        """Главная ищет по режиссёру — как в коллекции."""
         self.assertEqual(self._names('q=Нолан'), ['Интерстеллар'])
 
     def test_search_by_genre_name(self):
@@ -587,34 +586,58 @@ class HomeSearchTest(TestCase):
     def test_sorting_by_name(self):
         self.assertEqual(self._names('sort=name'), ['Интерстеллар', 'Комета'])
 
-    def test_home_and_collection_search_match(self):
-        """Одинаковый запрос даёт одинаковый результат на обеих страницах."""
-        home = self._names('q=Комета')
-        coll = [e.title.name for e in
-                self.client.get(f"{reverse('entry_list')}?q=Комета").context['entries']]
-        self.assertEqual(home, coll)
-
-    def test_results_hidden_until_query(self):
-        """Без поиска блок результатов пуст — лишних карточек на главной."""
-        page = self.client.get(reverse('home'))
-        self.assertFalse(page.context['has_query'])
-        self.assertNotContains(page, 'Найдено в моей коллекции')
-
     def test_htmx_returns_only_cards(self):
         """hx-запрос отдаёт только карточки, без всей страницы."""
-        page = self.client.get(f"{reverse('home')}?q=Нолан",
+        page = self.client.get(f"{reverse('entry_list')}?q=Нолан",
                                headers={'hx-request': 'true'})
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'Интерстеллар')
-        self.assertNotContains(page, 'Популярное сейчас')
         self.assertNotContains(page, 'Мои подборки')
 
-    def test_filter_panel_present_on_both_pages(self):
-        """Панель фильтров одна и та же на главной и в коллекции."""
-        for name in ('accept', 'name="dur"', 'name="min_rating"', 'name="review"',
+    def test_filter_panel_present(self):
+        """Панель фильтров на странице коллекции."""
+        page = self.client.get(reverse('entry_list'))
+        for name in ('name="dur"', 'name="min_rating"', 'name="review"',
                      'name="location"', 'name="genres"', 'name="tags"'):
-            self.assertContains(self.client.get(reverse('home')), name)
-            self.assertContains(self.client.get(reverse('entry_list')), name)
+            self.assertContains(page, name)
+
+
+class HomeSearchTest(TestCase):
+    """Поиск на главной ищет только по базе TMDB."""
+
+    def setUp(self):
+        self.user = _register(self.client, 'homeonly')
+        title = Title.objects.create(name='Интерстеллар', director='Кристофер Нолан')
+        Entry.objects.create(user=self.user, title=title)
+
+    def test_search_input_goes_to_tmdb(self):
+        """Поле поиска на главной запрашивает только TMDB."""
+        page = self.client.get(reverse('home'))
+        self.assertContains(page, f'hx-get="{reverse("tmdb_results")}"')
+        self.assertContains(page, 'id="tmdb-results"')
+
+    def test_collection_results_not_rendered(self):
+        """На главной нет блока результатов по своей коллекции."""
+        page = self.client.get(reverse('home'))
+        self.assertNotContains(page, 'Найдено в моей коллекции')
+        self.assertNotContains(page, 'my-results')
+        self.assertNotContains(page, 'homeSearch')
+
+    def test_collection_filters_not_on_home(self):
+        """Фильтров коллекции на главной нет — они живут в «Коллекции»."""
+        page = self.client.get(reverse('home'))
+        for name in ('name="dur"', 'name="min_rating"', 'name="genres"'):
+            self.assertNotContains(page, name)
+
+    def test_query_goes_to_tmdb_endpoint(self):
+        """Введённый запрос подставляется в поле и уходит в TMDB-поиск."""
+        page = self.client.get(f'{reverse("home")}?q=Нолан')
+        self.assertContains(page, 'value="Нолан"')
+
+    def test_hint_points_to_collection_search(self):
+        """Подсказка зовёт искать по коллекции на её страницу."""
+        page = self.client.get(reverse('home'))
+        self.assertContains(page, reverse('entry_list'))
 
 
 class SettingsTest(TestCase):
